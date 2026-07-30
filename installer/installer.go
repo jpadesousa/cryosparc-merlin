@@ -1,13 +1,13 @@
 package installer
 
 import (
-	"cryosparc-install/config"
 	"errors"
 	"fmt"
 	"os"
 	"time"
 
-	"cryosparc-install/ui"
+	"cryosparc-merlin-install/config"
+	"cryosparc-merlin-install/ui"
 
 	"charm.land/huh/v2"
 )

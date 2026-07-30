@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"cryosparc-install/config"
-	"cryosparc-install/installer"
+	"cryosparc-merlin-install/config"
+	"cryosparc-merlin-install/installer"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/fang"
@@ -40,7 +40,7 @@ func main() {
 
 	// CLI Create a new cobra Command
 	cobraCmd := &cobra.Command{
-		Use: "cryosparc-install",
+		Use: "cryosparc-merlin-install",
 		Long: fmt.Sprintf(`%s
 
 Install and configure a CryoSPARC instance on the Merlin 7 cluster.`,
