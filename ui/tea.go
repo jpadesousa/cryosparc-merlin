@@ -36,6 +36,11 @@ const (
 // Model
 // =============================================================================
 
+type stepStatus struct {
+	message string
+	status  string
+}
+
 // model holds all state for the Bubble Tea program.
 type model struct {
 	program *tea.Program
@@ -43,11 +48,12 @@ type model struct {
 	spinner  spinner.Model
 	progress progress.Model
 
-	steps     []Step   // Ordered list of steps to execute.
-	current   int      // Index of the step currently being executed.
-	completed []string // Messages for completed steps.
-	skipped   []string // Messages for skippeds steps.
-	err       error    // First error encountered, if any.
+	steps     []Step       // Ordered list of steps to execute.
+	history   []stepStatus // It keeps the history of all step types.
+	current   int          // Index of the step currently being executed.
+	completed []string     // Messages for completed steps.
+	skipped   []string     // Messages for skippeds steps.
+	err       error        // First error encountered, if any.
 
 	form *huh.Form // form to prompt the user
 }
@@ -57,16 +63,19 @@ type model struct {
 // =============================================================================
 // Step represents a single unit of work in the progress UI.
 type Step struct {
-	Message     string
-	SkipMessage string // Message shown when skipped.
+	Message          string
+	CompletedMessage string
+	SkipMessage      string
 
-	Condition       func() bool // Condition for skipping steps.
-	ShowProgressBar bool        // Show progress bar
+	Condition func() (bool, error)
+	Skip      func() bool
+
+	ShowProgressBar bool
 
 	Action func(update func(float64)) error
 	Exec   func() *exec.Cmd
 
-	Prompt func() *huh.Form // Interactive prompt
+	Prompt func() *huh.Form
 }
 
 // stepResult is sent back to the update loop after a step finishes.
@@ -97,21 +106,32 @@ var program *tea.Program
 // When the Action completes, it returns a stepResult message.
 func runStep(step Step) tea.Cmd {
 	return func() tea.Msg {
+		shouldRun := false
 
-		// Prompt
-		if step.Prompt != nil &&
-			(step.Condition == nil || step.Condition()) {
+		if step.Condition != nil {
+			var err error
+			shouldRun, err = step.Condition()
+			if err != nil {
+				return stepResult{err: err}
+			}
+		}
+
+		if step.Prompt != nil && shouldRun {
 			return startPrompt{form: step.Prompt()}
 		}
 
-		// Skipped
-		if step.Condition != nil && step.Condition() {
+		return executeStep(step)()
+	}
+}
+
+func executeStep(step Step) tea.Cmd {
+	return func() tea.Msg {
+		if step.Skip != nil && step.Skip() {
 			return stepSkipped{
 				message: step.SkipMessage,
 			}
 		}
 
-		// External execution (pauses UI and resumes it)
 		if step.Exec != nil {
 			return tea.ExecProcess(
 				step.Exec(),
@@ -121,7 +141,6 @@ func runStep(step Step) tea.Cmd {
 			)()
 		}
 
-		// Actions (progress is only shown if percent if != 0)
 		err := step.Action(func(percent float64) {
 			program.Send(progressMsg(percent))
 		})
@@ -148,28 +167,6 @@ func (m model) Init() tea.Cmd {
 // Update
 // =============================================================================
 
-func executeStep(step Step) tea.Cmd {
-	return func() tea.Msg {
-
-		if step.Exec != nil {
-			return tea.ExecProcess(
-				step.Exec(),
-				func(err error) tea.Msg {
-					return stepResult{err: err}
-				},
-			)()
-		}
-
-		err := step.Action(func(percent float64) {
-			program.Send(progressMsg(percent))
-		})
-
-		return stepResult{
-			err: err,
-		}
-	}
-}
-
 // Update processes incoming messages and advances the program state.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
@@ -180,13 +177,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Print form if exists
 	if m.form != nil {
 		form, cmd := m.form.Update(msg)
 		m.form = form.(*huh.Form)
 
 		if m.form.State == huh.StateCompleted {
 			m.form = nil
-			return m, executeStep(m.steps[m.current])
+			return m, tea.Batch(
+				executeStep(m.steps[m.current]),
+				m.spinner.Tick,
+			)
 		}
 
 		return m, cmd
@@ -211,13 +212,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.steps[m.current].SkipMessage,
 		)
 
+		m.history = append(m.history, stepStatus{
+			status:  "skipped",
+			message: m.steps[m.current].SkipMessage,
+		})
+
 		m.current++
 
 		if m.current == len(m.steps) {
 			return m, tea.Quit
 		}
 
-		return m, runStep(m.steps[m.current])
+		return m, tea.Batch(
+			runStep(m.steps[m.current]),
+			m.spinner.Tick)
 
 	// Initial window size and resizing if the terminal windows changes
 	case tea.WindowSizeMsg:
@@ -253,10 +261,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Record the completed step so it can be rendered with a checkmark.
-		m.completed = append(
-			m.completed,
-			m.steps[m.current].Message,
-		)
+		if m.steps[m.current].CompletedMessage != "" {
+			m.completed = append(
+				m.completed,
+				m.steps[m.current].CompletedMessage,
+			)
+
+			m.history = append(m.history, stepStatus{
+				status:  "completed",
+				message: m.steps[m.current].CompletedMessage,
+			})
+		}
 
 		// Advance to the next step.
 		m.current++
@@ -267,7 +282,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Otherwise, start the next step.
-		return m, runStep(m.steps[m.current])
+		return m, tea.Batch(
+			runStep(m.steps[m.current]),
+			m.spinner.Tick)
 	}
 
 	return m, nil
@@ -289,24 +306,24 @@ func (m model) View() tea.View {
 
 	var b strings.Builder
 
-	// Render every completed step with a checkmark.
-	for _, step := range m.completed {
-		fmt.Fprintf(
-			&b,
-			"%s %s\n",
-			successStyle.Render("✔"),
-			step,
-		)
-	}
+	for _, step := range m.history {
+		switch step.status {
+		case "completed":
+			fmt.Fprintf(
+				&b,
+				"%s %s\n",
+				successStyle.Render("✔"),
+				step.message,
+			)
 
-	// Render every skipped step with a skip symbol.
-	for _, step := range m.skipped {
-		fmt.Fprintf(
-			&b,
-			"%s %s\n",
-			skipStyle.Render("↷"),
-			step,
-		)
+		case "skipped":
+			fmt.Fprintf(
+				&b,
+				"%s %s\n",
+				skipStyle.Render("↷"),
+				step.message,
+			)
+		}
 	}
 
 	// If execution failed, render the error and stop.
@@ -321,7 +338,7 @@ func (m model) View() tea.View {
 	}
 
 	// Show the currently running step with the animated spinner.
-	if m.current < len(m.steps) {
+	if m.current < len(m.steps) && m.steps[m.current].Message != "" {
 		fmt.Fprintf(
 			&b,
 			"%s %s\n",
@@ -337,6 +354,17 @@ func (m model) View() tea.View {
 			)
 		}
 	}
+
+	// Completed message
+	// if m.current >= len(m.steps) && m.err == nil {
+	// 	fmt.Fprintf(
+	// 		&b,
+	// 		"\n%s Completed successfully (%d completed, %d skipped).\n",
+	// 		successStyle.Render("✔"),
+	// 		len(m.completed),
+	// 		len(m.skipped),
+	// 	)
+	// }
 
 	return tea.NewView(b.String())
 }
@@ -361,5 +389,6 @@ func Run(steps []Step) error {
 	program = tea.NewProgram(m)
 
 	_, err := program.Run()
+
 	return err
 }

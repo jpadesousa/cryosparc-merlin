@@ -1,4 +1,4 @@
-module cryosparc-merlin-install
+module cryosparc-merlin
 
 go 1.25.8
 
