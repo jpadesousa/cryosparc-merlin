@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,26 +16,49 @@ import (
 	"strings"
 )
 
-var ErrInstallationCancelled = errors.New("Installation cancelled by user")
+var ErrInstallationCancelled = errors.New("installation cancelled by user")
 
 // =============================================================================
 // Cryosparcm command
 // =============================================================================
-func cryosparcmCmd(remotehost, homedir string, args ...string) *exec.Cmd {
-	remoteCmd := append([]string{"cryosparcm"}, args...)
+func cryosparcmCmd(hostname, cryosparcpath string, help bool, args ...string) *exec.Cmd {
 
-	if homedir != "" {
-		remoteCmd = append(
-			[]string{"cryosparcm", "--dir", filepath.Join(homedir, "cryosparc_master")},
-			args...,
+	var cmd *exec.Cmd
+
+	remoteCmd := []string{"cryosparcm"}
+
+	if cryosparcpath != "" {
+		remoteCmd = append(remoteCmd,
+			"--dir",
+			filepath.Join(cryosparcpath, "cryosparc_master"),
 		)
 	}
 
-	cmd := exec.Command(
-		"ssh",
-		fmt.Sprintf("%s@%s", os.Getenv("USER"), remotehost),
-		strings.Join(remoteCmd, " "),
-	)
+	remoteCmd = append(remoteCmd, args...)
+
+	if help || len(args) == 0 {
+
+		cmd = exec.Command(
+			filepath.Join(cryosparcpath, "cryosparc_master", "bin", "cryosparcm"),
+			"--help",
+		)
+
+	} else if len(args) > 1 && args[len(args)-1] == "--help" {
+
+		cmd = exec.Command(
+			filepath.Join(cryosparcpath, "cryosparc_master", "bin", "cryosparcm"),
+			args...,
+		)
+
+	} else {
+
+		cmd = exec.Command(
+			"ssh",
+			fmt.Sprintf("%s@%s", os.Getenv("USER"), hostname),
+			strings.Join(remoteCmd, " "),
+		)
+
+	}
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -83,7 +107,11 @@ func (i *Command) downloadCryosparc(update func(float64), downloaddir, release, 
 	if err != nil {
 		return fmt.Errorf("download CryoSPARC %s package: %w", installation, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf(
@@ -96,7 +124,11 @@ func (i *Command) downloadCryosparc(update func(float64), downloaddir, release, 
 	if err != nil {
 		return fmt.Errorf("create %q: %w", archive, err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("failed to close file: %v", err)
+		}
+	}()
 
 	reader := &progressReader{
 		Reader: resp.Body,
@@ -131,7 +163,11 @@ func directoryExistsAndNotEmpty(path string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("open %q: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("failed to close file: %v", err)
+		}
+	}()
 
 	_, err = f.Readdirnames(1)
 	switch {
@@ -170,13 +206,21 @@ func (i *Command) extractArchive(_ func(float64), downloaddir, extractdir, filen
 	if err != nil {
 		return fmt.Errorf("open archive %q: %w", archive, err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("failed to close file: %v", err)
+		}
+	}()
 
 	gz, err := gzip.NewReader(file)
 	if err != nil {
 		return fmt.Errorf("read gzip archive: %w", err)
 	}
-	defer gz.Close()
+	defer func() {
+		if err := gz.Close(); err != nil {
+			log.Printf("failed to close gzip: %v", err)
+		}
+	}()
 
 	tarReader := tar.NewReader(gz)
 
@@ -255,27 +299,74 @@ func (i *Command) extractArchive(_ func(float64), downloaddir, extractdir, filen
 // Install Master
 // =============================================================================
 func (i *Command) installMaster(
-	homedir,
+	cryosparcpath,
 	license,
-	remotehost,
-	dbdir string,
+	hostname,
+	dbpath,
+	ssdpath,
+	arch string,
 	baseport uint) *exec.Cmd {
 
-	script := filepath.Join(
-		homedir,
+	installScript := filepath.Join(
+		cryosparcpath,
 		"cryosparc_master",
 		"install.sh",
 	)
 
-	cmd := exec.Command(
-		script,
-		"--license", license,
-		"--hostname", remotehost,
-		"--dbpath", dbdir,
-		"--port", strconv.Itoa(int(baseport)),
-	)
+	var cmd *exec.Cmd
 
-	cmd.Dir = filepath.Dir(script)
+	// Get local architecture
+	localArch, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		localArch = []byte("")
+	}
+
+	isLocal := strings.TrimSpace(string(localArch)) == arch
+
+	if isLocal {
+		// Run locally
+		cmd = exec.Command(
+			installScript,
+			"--license", license,
+			"--hostname", hostname,
+			"--dbpath", dbpath,
+			"--ssdpath", ssdpath,
+			"--port", strconv.Itoa(int(baseport)),
+			"--ignore-port-conflicts",
+		)
+	} else if arch == "aarch64" {
+		// Run on ARM nodes
+		cmd = exec.Command(
+			"srun",
+			"--cluster", "gmerlin7",
+			"--partition", "gh-interactive",
+			"--time", "0-00:10:00",
+			installScript,
+			"--license", license,
+			"--hostname", hostname,
+			"--dbpath", dbpath,
+			"--ssdpath", ssdpath,
+			"--port", strconv.Itoa(int(baseport)),
+			"--ignore-port-conflicts",
+		)
+	} else {
+		// Run on x86 nodes
+		cmd = exec.Command(
+			"srun",
+			"--cluster", "merlin7",
+			"--partition", "interactive",
+			"--reservation", "interactive",
+			"--time", "0-00:10:00",
+			installScript,
+			"--license", license,
+			"--hostname", hostname,
+			"--dbpath", dbpath,
+			"--ssdpath", ssdpath,
+			"--port", strconv.Itoa(int(baseport)),
+			"--ignore-port-conflicts",
+		)
+	}
+
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -286,20 +377,53 @@ func (i *Command) installMaster(
 // =============================================================================
 // Install Worker
 // =============================================================================
-func (i *Command) installWorker(homedir, license string) *exec.Cmd {
+func (i *Command) installWorker(cryosparcpath, license, arch string) *exec.Cmd {
 
-	script := filepath.Join(
-		homedir,
+	installScript := filepath.Join(
+		cryosparcpath,
 		"cryosparc_worker",
 		"install.sh",
 	)
 
-	cmd := exec.Command(
-		script,
-		"--license", license,
-	)
+	var cmd *exec.Cmd
 
-	cmd.Dir = filepath.Dir(script)
+	// Get local architecture
+	localArch, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		localArch = []byte("")
+	}
+
+	isLocal := strings.TrimSpace(string(localArch)) == arch
+
+	if isLocal {
+		// Run locally
+		cmd = exec.Command(
+			installScript,
+			"--license", license,
+		)
+	} else if arch == "aarch64" {
+		// Run on ARM nodes
+		cmd = exec.Command(
+			"srun",
+			"--cluster", "gmerlin7",
+			"--partition", "gh-interactive",
+			"--time", "0-00:10:00",
+			installScript,
+			"--license", license,
+		)
+	} else {
+		// Run on x86 nodes
+		cmd = exec.Command(
+			"srun",
+			"--cluster", "merlin7",
+			"--partition", "interactive",
+			"--reservation", "interactive",
+			"--time", "0-00:10:00",
+			installScript,
+			"--license", license,
+		)
+	}
+
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

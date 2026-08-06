@@ -17,19 +17,18 @@ import (
 
 // Color and style variables
 var (
-	pathStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 	helpTitleStyle = lipgloss.NewStyle().
-			Foreground(charmtone.Charple).Bold(true)
+		Foreground(charmtone.Charple).Bold(true)
 )
 
 // Default flags variables
 var (
 	user                 = os.Getenv("USER")
-	defaultHomeDir       = filepath.Join("/data/user", user, "cryosparc")
-	defaultCryosparcmDir = filepath.Join(defaultHomeDir, "cryosparc_master")
-	defaultDbDir         = filepath.Join(defaultHomeDir, "database")
+	defaultCryosparcPath = filepath.Join("/data/user", user, "cryosparc")
+	defaultDbPath        = filepath.Join(defaultCryosparcPath, "database")
+	defaultSSDPath       = "/scratch"
 	defaultVersion       = "4.7.1"
-	defaultRemoteHost    = "service03.merlin7.psi.ch"
+	defaultHostName      = "service03.merlin7.psi.ch"
 	defaultArchMaster    = "x86_64"
 	defaultArchWorker    = "x86_64"
 	defaultArch          = "x86_64"
@@ -60,74 +59,7 @@ func main() {
 	cryosparcmCmd := newCommand(
 		"cryosparcm",
 		"Cryosparcm commands",
-		runHelpCmd,
-	)
-
-	cryosparcmStatusCmd := newCommand(
-		"status",
-		"Check CryoSPARC status",
-		runCmd((*command.Command).RunCryosparcmStatus),
-	)
-
-	cryosparcmStartCmd := newCommand(
-		"start",
-		"Start CryoSPARC",
-		runCmd((*command.Command).RunCryosparcmStart),
-	)
-
-	cryosparcmStopCmd := newCommand(
-		"stop",
-		"Stop CryoSPARC",
-		runCmd((*command.Command).RunCryosparcmStop),
-	)
-
-	cryosparcmRestartCmd := newCommand(
-		"restart",
-		"Restart CryoSPARC",
-		runCmd((*command.Command).RunCryosparcmRestart),
-	)
-
-	cryosparcmCreateUserCmd := newCommand(
-		"createuser",
-		"Create CryoSPARC user",
-		runCmd((*command.Command).RunCryosparcmCreateUser),
-	)
-
-	cryosparcmResetPasswordCmd := newCommand(
-		"resetpassword",
-		"Reset CryoSPARC password",
-		runCmd((*command.Command).RunCryosparcmResetPassword),
-	)
-
-	cryosparcmUpdateCmd := newCommand(
-		"update",
-		"Update CryoSPARC",
-		runCmd((*command.Command).RunCryosparcmUpdate),
-	)
-
-	cryosparcmPatchCmd := newCommand(
-		"patch",
-		"Patch CryoSPARC",
-		runCmd((*command.Command).RunCryosparcmPatch),
-	)
-
-	// cryosparcmUpdateCmd := newCommand(
-	// 	"update",
-	// 	"Update CryoSPARC instance",
-	// 	runCmdArgs((*command.Command).RunCryosparcmUpdate),
-	// )
-
-	// cryosparcmUpdateCmd.DisableFlagParsing = true
-
-	cryosparcmCmd.AddCommand(
-		cryosparcmStatusCmd,
-		cryosparcmStartCmd,
-		cryosparcmStopCmd,
-		cryosparcmRestartCmd,
-		cryosparcmCreateUserCmd,
-		cryosparcmResetPasswordCmd,
-		cryosparcmUpdateCmd,
-		cryosparcmPatchCmd,
+		runCmdArgs((*command.Command).RunCryosparcm),
 	)
 
 	// Install commands
@@ -140,12 +72,6 @@ func main() {
 	installCompleteCmd := newCommand(
 		"complete",
 		"Complete CryoSPARC installation",
-		runCmd((*command.Command).RunInstallComplete),
-	)
-
-	installCompleteArmCmd := newCommand(
-		"complete_arm",
-		"Complete CryoSPARC installation to run on GH nodes",
 		runCmd((*command.Command).RunInstallComplete),
 	)
 
@@ -202,7 +128,6 @@ func main() {
 
 	installCmd.AddCommand(
 		installCompleteCmd,
-		installCompleteArmCmd,
 		installMasterCmd,
 		installWorkerCmd,
 	)
@@ -214,33 +139,7 @@ func main() {
 	// cryosparcm CLI Flags
 	// =============================================
 
-	// status
-	addCryosparcmCommonFlags(cryosparcmStatusCmd)
-
-	// start
-	addCryosparcmCommonFlags(cryosparcmStartCmd)
-
-	// stop
-	addCryosparcmCommonFlags(cryosparcmStopCmd)
-
-	// restart
-	addCryosparcmCommonFlags(cryosparcmRestartCmd)
-
-	// createuser
-	addCryosparcmCommonFlags(cryosparcmCreateUserCmd)
-	addCryosparcmCreateUserFlags(cryosparcmCreateUserCmd)
-
-	// resetpassword
-	addCryosparcmCommonFlags(cryosparcmResetPasswordCmd)
-	addCryosparcmPasswordFlags(cryosparcmResetPasswordCmd)
-
-	// update
-	addCryosparcmCommonFlags(cryosparcmUpdateCmd)
-	addCryosparcmUpdateFlags(cryosparcmUpdateCmd)
-
-	// patch
-	addCryosparcmCommonFlags(cryosparcmPatchCmd)
-	addCryosparcmPatchFlags(cryosparcmPatchCmd)
+	addCryosparcmFlags(cryosparcmCmd)
 
 	// =============================================
 	// Install CLI Flags
@@ -249,9 +148,6 @@ func main() {
 	// complete
 	addCommonInstallFlags(installCompleteCmd)
 	addInstallCompleteFlags(installCompleteCmd)
-
-	// complete_arm
-	addInstallCompletArmFlags(installCompleteArmCmd)
 
 	// master
 	addCommonInstallFlags(installMasterCmd)
@@ -301,15 +197,12 @@ func newCommand(
 // Prepare config
 // =============================================================================
 func prepareConfig(cmd *cobra.Command) {
-	// if strings.Contains(cfg.Version, "beta") &&
-	// 	!cmd.Flags().Changed("homedir") {
-	// 	cfg.HomeDir = filepath.Join("/data/user", user, "cryosparc_beta")
-	// }
 
-	if !cmd.Flags().Changed("dbdir") &&
-		cfg.HomeDir != defaultHomeDir {
-		cfg.DbDir = filepath.Join(cfg.HomeDir, "database")
+	if !cmd.Flags().Changed("dbpath") &&
+		cfg.CryosparcPath != defaultCryosparcPath {
+		cfg.DbPath = filepath.Join(cfg.CryosparcPath, "database")
 	}
+
 }
 
 // =============================================================================
@@ -343,97 +236,19 @@ func runCmdArgs(fn func(*command.Command, []string) error) func(*cobra.Command, 
 // =============================================================================
 
 // cryosparcm
-func addCryosparcmCommonFlags(cmd *cobra.Command) {
+func addCryosparcmFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
-	flags.StringVar(&cfg.HomeDir, "homedir", defaultHomeDir,
+	flags.StringVar(&cfg.CryosparcPath, "cryosparc-path", defaultCryosparcPath,
 		"Installation directory for CryoSPARC",
 	)
 
-	flags.StringVar(&cfg.RemoteHost, "remotehost", defaultRemoteHost,
+	flags.StringVar(&cfg.HostName, "hostname", defaultHostName,
 		"Hostname used to access the CryoSPARC web interface",
 	)
 
-	flags.SetInterspersed(false)
-	flags.SortFlags = false
-}
-
-func addCryosparcmPasswordFlags(cmd *cobra.Command) {
-	flags := cmd.Flags()
-
-	flags.StringVar(&cfg.Email, "email", "",
-		"CryoSPARC user email",
-	)
-}
-
-func addCryosparcmCreateUserFlags(cmd *cobra.Command) {
-	flags := cmd.Flags()
-
-	flags.StringVar(&cfg.Username, "username", "",
-		"CryoSPARC user username",
-	)
-
-	flags.StringVar(&cfg.FirstName, "firstname", "",
-		"CryoSPARC user first name",
-	)
-
-	flags.StringVar(&cfg.LastName, "lastname", "",
-		"CryoSPARC user last name",
-	)
-}
-
-func addCryosparcmUpdateFlags(cmd *cobra.Command) {
-	flags := cmd.Flags()
-
-	flags.StringVar(&cfg.CryosparcmUpdate.Version, "version", "",
-		"Specify the version of CryoSPARC to update to (e.g., --version=v4.0.0)",
-	)
-
-	flags.BoolVar(&cfg.CryosparcmUpdate.Check, "check", false,
-		"Check if there are any updates available for CryoSPARC",
-	)
-
-	flags.BoolVar(&cfg.CryosparcmUpdate.List, "list", false,
-		"List all available versions CryoSPARC can update to",
-	)
-
-	flags.BoolVar(&cfg.CryosparcmUpdate.Override, "override", false,
-		"Update to the latest version of CryoSPARC, regardless of the version the instance is currently on",
-	)
-
-	flags.BoolVar(&cfg.CryosparcmUpdate.DownloadOnly, "download-only", false,
-		"Download the master and worker update packages without updating",
-	)
-
-	flags.BoolVar(&cfg.CryosparcmUpdate.SkipDownload, "skip-download", false,
-		"Update CryoSPARC with previously-downloaded master and worker packages",
-	)
-
-	flags.SetInterspersed(false)
-	flags.SortFlags = false
-}
-
-func addCryosparcmPatchFlags(cmd *cobra.Command) {
-	flags := cmd.Flags()
-
-	flags.BoolVar(&cfg.CryosparcmPatch.Install, "install", false,
-		"manually install a downloaded patch file",
-	)
-
-	flags.BoolVar(&cfg.CryosparcmPatch.Download, "download", false,
-		"download master and worker patches for manual installation",
-	)
-
-	flags.BoolVar(&cfg.CryosparcmPatch.Check, "check", false,
-		"check to see if a patch is available",
-	)
-
-	flags.BoolVarP(&cfg.CryosparcmPatch.Yes, "yes", "y", false,
-		"confirm patch installation without prompt",
-	)
-
-	flags.BoolVarP(&cfg.CryosparcmPatch.Force, "force", "f", false,
-		"install latest patch again even if already installed",
+	flags.BoolVar(&cfg.CryosparcmHelp, "list-commands", false,
+		"List cryosparcm commands (only available from version 5)",
 	)
 
 	flags.SetInterspersed(false)
@@ -450,7 +265,7 @@ func addCommonInstallFlags(cmd *cobra.Command) {
 	flags.StringVar(&cfg.Version, "version", defaultVersion,
 		"CryoSPARC version to install",
 	)
-	flags.StringVar(&cfg.HomeDir, "homedir", defaultHomeDir,
+	flags.StringVar(&cfg.CryosparcPath, "cryosparc-path", defaultCryosparcPath,
 		"Installation directory for CryoSPARC",
 	)
 
@@ -463,10 +278,13 @@ func addCommonInstallFlags(cmd *cobra.Command) {
 func addInstallMasterFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
-	flags.StringVar(&cfg.DbDir, "dbdir", defaultDbDir,
-		"Directory for the CryoSPARC database",
+	flags.StringVar(&cfg.DbPath, "dbpath", defaultDbPath,
+		"CryoSPARC database directory",
 	)
-	flags.StringVar(&cfg.RemoteHost, "remotehost", defaultRemoteHost,
+	flags.StringVar(&cfg.SSDPath, "ssdpath", defaultSSDPath,
+		"SSD cache directory",
+	)
+	flags.StringVar(&cfg.HostName, "hostname", defaultHostName,
 		"Hostname used to access the CryoSPARC web interface",
 	)
 	flags.UintVar(&cfg.BasePort, "port", 0,
@@ -489,10 +307,10 @@ func addInstallWorkerFlags(cmd *cobra.Command) {
 func addInstallCompleteFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
-	flags.StringVar(&cfg.DbDir, "dbdir", defaultDbDir,
-		"Directory for the CryoSPARC database",
+	flags.StringVar(&cfg.DbPath, "dbpath", defaultDbPath,
+		"CryoSPARC database directory",
 	)
-	flags.StringVar(&cfg.RemoteHost, "remotehost", defaultRemoteHost,
+	flags.StringVar(&cfg.HostName, "hostname", defaultHostName,
 		"Hostname used to access the CryoSPARC web interface",
 	)
 	flags.UintVar(&cfg.BasePort, "port", 0,
@@ -506,41 +324,4 @@ func addInstallCompleteFlags(cmd *cobra.Command) {
 	flags.StringVar(&cfg.ArchWorker, "arch-worker", defaultArchWorker,
 		"Worker architecture (x86_64 or aarch64)",
 	)
-}
-
-func addInstallCompletArmFlags(cmd *cobra.Command) {
-	flags := cmd.Flags()
-
-	flags.StringVar(&cfg.License, "license", "",
-		"CryoSPARC license ID",
-	)
-	flags.StringVar(&cfg.Version, "version", "5.1.0-privatebeta.2",
-		"CryoSPARC version to install",
-	)
-	flags.StringVar(&cfg.HomeDir, "homedir", filepath.Join("/data/user", user, "cryosparc_beta"),
-		"Installation directory for CryoSPARC",
-	)
-
-	flags.StringVar(&cfg.DbDir, "dbdir", filepath.Join("/data/user", user, "cryosparc_beta", "database"),
-		"Directory for the CryoSPARC database",
-	)
-	flags.StringVar(&cfg.RemoteHost, "remotehost", defaultRemoteHost,
-		"Hostname used to access the CryoSPARC web interface",
-	)
-	flags.UintVar(&cfg.BasePort, "port", 0,
-		"Base TCP port for CryoSPARC services",
-	)
-
-	flags.StringVar(&cfg.ArchMaster, "arch-master", "x86_64",
-		"Master architecture (x86_64 or aarch64)",
-	)
-
-	flags.StringVar(&cfg.ArchWorker, "arch-worker", "aarch64",
-		"Worker architecture (x86_64 or aarch64)",
-	)
-
-	_ = cmd.MarkFlagRequired("license")
-
-	flags.SetInterspersed(false)
-	flags.SortFlags = false
 }

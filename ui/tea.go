@@ -43,8 +43,6 @@ type stepStatus struct {
 
 // model holds all state for the Bubble Tea program.
 type model struct {
-	program *tea.Program
-
 	spinner  spinner.Model
 	progress progress.Model
 
@@ -254,10 +252,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// A step has finished executing
 	case stepResult:
-		// Stop immediately if the step returned an error.
 		if msg.err != nil {
 			m.err = msg.err
-			return m, tea.Quit
+
+			return m, tea.Sequence(
+				func() tea.Msg { return nil },
+				tea.Quit,
+			)
 		}
 
 		// Record the completed step so it can be rendered with a checkmark.
@@ -354,17 +355,6 @@ func (m model) View() tea.View {
 			)
 		}
 	}
-
-	// Completed message
-	// if m.current >= len(m.steps) && m.err == nil {
-	// 	fmt.Fprintf(
-	// 		&b,
-	// 		"\n%s Completed successfully (%d completed, %d skipped).\n",
-	// 		successStyle.Render("✔"),
-	// 		len(m.completed),
-	// 		len(m.skipped),
-	// 	)
-	// }
 
 	return tea.NewView(b.String())
 }
