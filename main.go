@@ -32,6 +32,16 @@ var (
 	defaultArchMaster    = "x86_64"
 	defaultArchWorker    = "x86_64"
 	defaultArch          = "x86_64"
+
+	// Lanes
+	defaultLaneName        = "gpu-hourly"
+	defaultLaneMemory      = "ram_gb"
+	defaultLaneGpus        = "num_gpu"
+	defaultLaneCpusPerTask = "num_cpu"
+	defaultLaneCachePath   = "/scratch"
+	defaultLaneCluster     = "gmerlin7"
+	defaultLanePartition   = "a100-hourly"
+	defaultLaneTime        = "00-01:00:00"
 )
 
 var cfg config.Config
@@ -132,8 +142,29 @@ func main() {
 		installWorkerCmd,
 	)
 
+	// lanes commands
+	lanesCmd := newCommand(
+		"lanes",
+		"Lanes commands",
+		runHelpCmd,
+	)
+
+	lanesCreateCmd := newCommand(
+		"create",
+		"Create a new CryoSPARC lane",
+		runCmd((*command.Command).RunLanesCreateCmd),
+	)
+
+	lanesCmd.AddCommand(
+		lanesCreateCmd,
+	)
+
 	// Base commands
-	cobraCmd.AddCommand(cryosparcmCmd, installCmd)
+	cobraCmd.AddCommand(
+		cryosparcmCmd,
+		installCmd,
+		lanesCmd,
+	)
 
 	// =============================================
 	// cryosparcm CLI Flags
@@ -158,6 +189,14 @@ func main() {
 	addInstallWorkerFlags(installWorkerCmd)
 
 	// =============================================
+	// lanes CLI Flags
+	// =============================================
+
+	// create
+	addCommonLanesFlags(lanesCreateCmd)
+	addLanesCreateFlags(lanesCreateCmd)
+
+	// =============================================
 	// Execute app
 	// =============================================
 
@@ -167,7 +206,7 @@ func main() {
 
 	// Execute cobra command
 	if err := fang.Execute(context.Background(), cobraCmd); err != nil {
-		fmt.Fprintf(os.Stderr, "  Run '%s --help' for usage.\n\n", cobraCmd.CommandPath())
+		fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n\n", cobraCmd.CommandPath())
 		os.Exit(1)
 	}
 }
@@ -324,4 +363,54 @@ func addInstallCompleteFlags(cmd *cobra.Command) {
 	flags.StringVar(&cfg.ArchWorker, "arch-worker", defaultArchWorker,
 		"Worker architecture (x86_64 or aarch64)",
 	)
+}
+
+// lanes
+func addCommonLanesFlags(cmd *cobra.Command) {
+	flags := cmd.Flags()
+
+	flags.StringVar(&cfg.CryosparcPath, "cryosparc-path", defaultCryosparcPath,
+		"Installation directory for CryoSPARC",
+	)
+
+	flags.SetInterspersed(false)
+	flags.SortFlags = false
+}
+
+func addLanesCreateFlags(cmd *cobra.Command) {
+	flags := cmd.Flags()
+
+	flags.StringVar(&cfg.LanesCreate.Name, "name", defaultLaneName,
+		"Lane name",
+	)
+
+	flags.StringVar(&cfg.LanesCreate.CachePath, "cache-path", defaultLaneCachePath,
+		"Cache directory",
+	)
+
+	flags.StringVar(&cfg.LanesCreate.Cluster, "cluster", defaultLaneCluster,
+		"Cluster name (merlin7 or gmerlin7)",
+	)
+
+	flags.StringVar(&cfg.LanesCreate.Memory, "memory", defaultLaneMemory,
+		"Memory requested for the job (in Gb) (default: set by CryoSPARC)",
+	)
+
+	flags.StringVar(&cfg.LanesCreate.Time, "time", defaultLaneTime,
+		"Time requested for the job (format: dd-hh:mm:ss)",
+	)
+
+	flags.StringVar(&cfg.LanesCreate.Partition, "partition", defaultLanePartition,
+		"Partition requested for the job (e.g., cpu-hourly or gpu-hourly)",
+	)
+
+	flags.StringVar(&cfg.LanesCreate.Gpus, "gpus", defaultLaneGpus,
+		"Number of GPUs requested for the job (default: set by CryoSPARC)",
+	)
+
+	flags.StringVar(&cfg.LanesCreate.CpusPerTask, "cpus-per-task", defaultLaneCpusPerTask,
+		"Number of CPUs per task requested for the job (default: set by CryoSPARC)",
+	)
+
+	_ = cmd.MarkFlagRequired("name")
 }

@@ -1,0 +1,14 @@
+
+
+
+
+{
+    "name" : "gpu-hourly",
+    "worker_bin_path" : "/data/user/USERNAME/cryosparc/cryosparc_worker/bin/cryosparcw",
+    "cache_path" : "/scratch/",
+    "send_cmd_tpl" : "{{ command }}",
+    "qsub_cmd_tpl" : "bash -c 'sbatch --parsable --cluster=gmerlin7 \"{{ script_path_abs }}\" | cut -d \";\" -f 1'",
+    "qstat_cmd_tpl" : "squeue --cluster=gmerlin7 -j {{ cluster_job_id }}",
+    "qdel_cmd_tpl" : "scancel --cluster=gmerlin7 {{ cluster_job_id }}",
+    "qinfo_cmd_tpl" : "sinfo --cluster=gmerlin7"
+}

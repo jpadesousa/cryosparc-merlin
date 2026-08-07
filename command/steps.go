@@ -24,16 +24,6 @@ func (i *Command) CryosparcmStep(hostname, cryosparcpath string, help bool, args
 	}
 }
 
-// func (i *Command) CryosparcmStatusStep(hostname, cryosparcpath string, help bool) ui.Step {
-// 	return ui.Step{
-// 		Message:          "Checking CryoSPARC instance status",
-// 		CompletedMessage: "",
-// 		Exec: func() *exec.Cmd {
-// 			return cryosparcmCmd(hostname, cryosparcpath, help, "status")
-// 		},
-// 	}
-// }
-
 func (i *Command) CryosparcmStartStep(hostname, cryosparcpath string, help bool) ui.Step {
 	return ui.Step{
 		Message:          "Starting CryoSPARC instance",
@@ -43,205 +33,6 @@ func (i *Command) CryosparcmStartStep(hostname, cryosparcpath string, help bool)
 		},
 	}
 }
-
-// func (i *Command) CryosparcmStopStep(hostname, cryosparcpath string, help bool) ui.Step {
-// 	return ui.Step{
-// 		Message:          "Stopping CryoSPARC instance",
-// 		CompletedMessage: "",
-// 		Exec: func() *exec.Cmd {
-// 			return cryosparcmCmd(hostname, cryosparcpath, help, "stop")
-// 		},
-// 	}
-// }
-
-// func (i *Command) CryosparcmRestartStep(hostname, cryosparcpath string, help bool) ui.Step {
-// 	return ui.Step{
-// 		Message:          "Restarting CryoSPARC instance",
-// 		CompletedMessage: "",
-// 		Exec: func() *exec.Cmd {
-// 			return cryosparcmCmd(hostname, cryosparcpath, help, "restart")
-// 		},
-// 	}
-// }
-
-// func (i *Command) CryosparcmCreateUserStep(hostname, cryosparcpath, email, username, firstName, lastName string, help bool) ui.Step {
-
-// 	var password string
-
-// 	return ui.Step{
-// 		Message:          "Creating CryoSPARC user",
-// 		CompletedMessage: "",
-// 		Condition: func() (bool, error) {
-// 			return true, nil
-// 		},
-// 		Prompt: func() *huh.Form {
-// 			return huh.NewForm(
-// 				huh.NewGroup(
-// 					huh.NewInput().
-// 						Title("Email").
-// 						Validate(func(s string) error {
-// 							if s == "" {
-// 								return errors.New("email is required")
-// 							}
-// 							return nil
-// 						}).
-// 						Value(&email),
-
-// 					huh.NewInput().
-// 						Title("Password (different from your PSI password)").
-// 						EchoMode(huh.EchoModePassword).
-// 						Validate(func(s string) error {
-// 							if s == "" {
-// 								return errors.New("password is required")
-// 							}
-// 							return nil
-// 						}).
-// 						Value(&password),
-
-// 					huh.NewInput().
-// 						Title("Username").
-// 						Value(&username),
-
-// 					huh.NewInput().
-// 						Title("First Name").
-// 						Value(&firstName),
-
-// 					huh.NewInput().
-// 						Title("Last Name").
-// 						Value(&lastName),
-// 				),
-// 			)
-// 		},
-// 		Exec: func() *exec.Cmd {
-
-// 			return cryosparcmCmd(
-// 				hostname,
-// 				cryosparcpath,
-// 				help,
-// 				"createuser",
-// 				"--email", email,
-// 				"--password", password,
-// 				"--username", username,
-// 				"--firstname", firstName,
-// 				"--lastname", lastName,
-// 			)
-// 		},
-// 	}
-// }
-
-// func (i *Command) CryosparcmResetPasswordStep(hostname, cryosparcpath, email string, help bool) ui.Step {
-
-// 	var password string
-
-// 	return ui.Step{
-// 		Message:          "Resetting CryoSPARC user password",
-// 		CompletedMessage: "",
-// 		Condition: func() (bool, error) {
-// 			return true, nil
-// 		},
-// 		Prompt: func() *huh.Form {
-// 			return huh.NewForm(
-// 				huh.NewGroup(
-// 					huh.NewInput().
-// 						Title("Email").
-// 						Validate(func(s string) error {
-// 							if s == "" {
-// 								return errors.New("email is required")
-// 							}
-// 							return nil
-// 						}).
-// 						Value(&email),
-
-// 					huh.NewInput().
-// 						Title("Password (different from your PSI password)").
-// 						EchoMode(huh.EchoModePassword).
-// 						Validate(func(s string) error {
-// 							if s == "" {
-// 								return errors.New("password is required")
-// 							}
-// 							return nil
-// 						}).
-// 						Value(&password),
-// 				),
-// 			)
-// 		},
-// 		Exec: func() *exec.Cmd {
-// 			return cryosparcmCmd(
-// 				hostname,
-// 				cryosparcpath,
-// 				help,
-// 				"resetpassword",
-// 				"--email", email,
-// 				"--password", password,
-// 			)
-// 		},
-// 	}
-// }
-
-// func (i *Command) CryosparcmUpdateStep(
-// 	hostname, cryosparcpath, version string,
-// 	check, list, override, downloadOnly, skipDownload, help bool,
-// ) ui.Step {
-// 	return ui.Step{
-// 		Message:          "",
-// 		CompletedMessage: "",
-// 		Exec: func() *exec.Cmd {
-// 			args := []string{"update"}
-
-// 			if version != "" {
-// 				args = append(args, "--version="+version)
-// 			}
-// 			if check {
-// 				args = append(args, "--check")
-// 			}
-// 			if list {
-// 				args = append(args, "--list")
-// 			}
-// 			if override {
-// 				args = append(args, "--override")
-// 			}
-// 			if downloadOnly {
-// 				args = append(args, "--download-only")
-// 			}
-// 			if skipDownload {
-// 				args = append(args, "--skip-download")
-// 			}
-
-// 			return cryosparcmCmd(hostname, cryosparcpath, help, args...)
-// 		},
-// 	}
-// }
-
-// func (i *Command) CryosparcmPatchStep(
-// 	hostname, cryosparcpath string,
-// 	install, download, check, yes, force, help bool,
-// ) ui.Step {
-// 	return ui.Step{
-// 		Message:          "",
-// 		CompletedMessage: "",
-// 		Exec: func() *exec.Cmd {
-// 			args := []string{"patch"}
-
-// 			if install {
-// 				args = append(args, "--install")
-// 			}
-// 			if download {
-// 				args = append(args, "--download")
-// 			}
-// 			if check {
-// 				args = append(args, "--check")
-// 			}
-// 			if yes {
-// 				args = append(args, "--yes")
-// 			}
-// 			if force {
-// 				args = append(args, "--force")
-// 			}
-
-// 			return cryosparcmCmd(hostname, cryosparcpath, help, args...)
-// 		},
-// 	}
-// }
 
 // =============================================================================
 // Create CryosparcPath Step
@@ -499,6 +290,44 @@ func (i *Command) replaceLicenseIDStep(installDir, license, installation string)
 		Action: func(update func(float64)) error {
 
 			return i.replaceLicenseID(update, installDir, license)
+		},
+	}
+}
+
+// =============================================================================
+// Lanes Steps
+// =============================================================================
+func (i *Command) RunLanesCreateStep(
+	cryosparcpath,
+	name,
+	cachepath,
+	memory,
+	time,
+	partition,
+	gpus,
+	cpuspertask,
+	cluster string) ui.Step {
+	return ui.Step{
+		Message: fmt.Sprintf("Creating CryoSPARC lane: '%s' (%s)",
+			name,
+			filepath.Join(cryosparcpath, "lanes"),
+		),
+		CompletedMessage: fmt.Sprintf("Created CryoSPARC lane: '%s' (%s)",
+			name,
+			filepath.Join(cryosparcpath, "lanes"),
+		),
+		Action: func(update func(float64)) error {
+			return i.CreateLane(
+				update,
+				cryosparcpath,
+				name,
+				cachepath,
+				memory,
+				time,
+				partition,
+				gpus,
+				cpuspertask,
+				cluster)
 		},
 	}
 }

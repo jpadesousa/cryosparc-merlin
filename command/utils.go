@@ -3,6 +3,7 @@ package command
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -313,64 +314,65 @@ func (i *Command) installMaster(
 		"install.sh",
 	)
 
-	var cmd *exec.Cmd
+	installArgs := []string{
+		installScript,
+		"--license", license,
+		"--hostname", hostname,
+		"--dbpath", dbpath,
+		"--ssdpath", ssdpath,
+		"--port", strconv.Itoa(int(baseport)),
+	}
 
-	// Get local architecture
+	// Get local architecture.
 	localArch, err := exec.Command("uname", "-m").Output()
+
 	if err != nil {
-		localArch = []byte("")
+		localArch = nil
 	}
 
 	isLocal := strings.TrimSpace(string(localArch)) == arch
+	var args []string
 
 	if isLocal {
-		// Run locally
-		cmd = exec.Command(
-			installScript,
-			"--license", license,
-			"--hostname", hostname,
-			"--dbpath", dbpath,
-			"--ssdpath", ssdpath,
-			"--port", strconv.Itoa(int(baseport)),
-			"--ignore-port-conflicts",
-		)
+		// Run locally.
+		args = installArgs
 	} else if arch == "aarch64" {
-		// Run on ARM nodes
-		cmd = exec.Command(
+		// Run on ARM nodes.
+		args = append([]string{
 			"srun",
 			"--cluster", "gmerlin7",
 			"--partition", "gh-interactive",
-			"--time", "0-00:10:00",
-			installScript,
-			"--license", license,
-			"--hostname", hostname,
-			"--dbpath", dbpath,
-			"--ssdpath", ssdpath,
-			"--port", strconv.Itoa(int(baseport)),
-			"--ignore-port-conflicts",
-		)
+			"--time", "0-00:30:00"},
+			installArgs...)
 	} else {
-		// Run on x86 nodes
-		cmd = exec.Command(
+		// Run on x86 nodes.
+		args = append([]string{
 			"srun",
 			"--cluster", "merlin7",
 			"--partition", "interactive",
 			"--reservation", "interactive",
-			"--time", "0-00:10:00",
-			installScript,
-			"--license", license,
-			"--hostname", hostname,
-			"--dbpath", dbpath,
-			"--ssdpath", ssdpath,
-			"--port", strconv.Itoa(int(baseport)),
-			"--ignore-port-conflicts",
-		)
+			"--time", "0-00:30:00"},
+			installArgs...)
 	}
 
+	versionData, err := os.ReadFile(
+		filepath.Join(cryosparcpath, "cryosparc_master", "version"))
+
+	if err == nil {
+		version := strings.TrimSpace(string(versionData))
+		major, _, ok := strings.Cut(version, ".")
+		if !ok {
+			major = version
+		}
+		if majorVersion, err := strconv.Atoi(major); err == nil && majorVersion >= 5 {
+			args = append(args, "--ignore-port-conflicts")
+		}
+	}
+
+	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
 	return cmd
 }
 
@@ -407,7 +409,7 @@ func (i *Command) installWorker(cryosparcpath, license, arch string) *exec.Cmd {
 			"srun",
 			"--cluster", "gmerlin7",
 			"--partition", "gh-interactive",
-			"--time", "0-00:10:00",
+			"--time", "0-00:30:00",
 			installScript,
 			"--license", license,
 		)
@@ -418,7 +420,7 @@ func (i *Command) installWorker(cryosparcpath, license, arch string) *exec.Cmd {
 			"--cluster", "merlin7",
 			"--partition", "interactive",
 			"--reservation", "interactive",
-			"--time", "0-00:10:00",
+			"--time", "0-00:30:00",
 			installScript,
 			"--license", license,
 		)
@@ -453,6 +455,158 @@ func (i *Command) replaceLicenseID(_ func(float64), installDir, license string) 
 
 	if err := os.WriteFile(path, []byte(updated), 0644); err != nil {
 		return fmt.Errorf("write config.sh %q: %w", path, err)
+	}
+
+	return nil
+}
+
+// go run . cryosparcm --cryosparc-path /data/user/agosti_j/cryosparc_beta/ cluster connect --help
+
+//  Usage: cryosparcm cluster connect [OPTIONS]
+
+//  Create or update a cluster with cluster_info.json and cluster_script.sh.
+
+// ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+// │ --info          FILE  [default: cluster_info.json]                                                                                                                                       │
+// │ --script        FILE  [default: cluster_script.sh]                                                                                                                                       │
+// │ --help                Show this message and exit.                                                                                                                                        │
+// ╰──────────────────────────────
+
+type ClusterInfo struct {
+	Name          string `json:"name"`
+	WorkerBinPath string `json:"worker_bin_path"`
+	CachePath     string `json:"cache_path"`
+	SendCmdTpl    string `json:"send_cmd_tpl"`
+	QsubCmdTpl    string `json:"qsub_cmd_tpl"`
+	QstatCmdTpl   string `json:"qstat_cmd_tpl"`
+	QdelCmdTpl    string `json:"qdel_cmd_tpl"`
+	QinfoCmdTpl   string `json:"qinfo_cmd_tpl"`
+}
+
+func (i *Command) CreateLane(
+	_ func(float64),
+	cryosparcpath,
+	name,
+	cachepath,
+	memory,
+	time,
+	partition,
+	gpus,
+	cpuspertask,
+	cluster string,
+) error {
+
+	// Directory where the generated files will be placed.
+	laneDir := filepath.Join(cryosparcpath, "lanes", name)
+
+	if err := os.MkdirAll(laneDir, 0755); err != nil {
+		return fmt.Errorf("create lane directory: %w", err)
+	}
+
+	workerBinPath := filepath.Join(
+		cryosparcpath,
+		"cryosparc_worker",
+		"bin",
+		"cryosparcw",
+	)
+
+	// ---------------------------------------------------------------------
+	// cluster_info.json
+	// ---------------------------------------------------------------------
+
+	info := ClusterInfo{
+		Name:          name,
+		WorkerBinPath: workerBinPath,
+		CachePath:     cachepath,
+
+		SendCmdTpl: "{{ command }}",
+
+		QsubCmdTpl: fmt.Sprintf(
+			"bash -c 'sbatch --parsable --cluster=%s \"{{ script_path_abs }}\" | cut -d \";\" -f 1'",
+			cluster,
+		),
+
+		QstatCmdTpl: fmt.Sprintf(
+			"squeue --cluster=%s -j {{ cluster_job_id }}",
+			cluster,
+		),
+
+		QdelCmdTpl: fmt.Sprintf(
+			"scancel --cluster=%s {{ cluster_job_id }}",
+			cluster,
+		),
+
+		QinfoCmdTpl: fmt.Sprintf(
+			"sinfo --cluster=%s",
+			cluster,
+		),
+	}
+
+	infoJSON, err := json.MarshalIndent(info, "", "    ")
+	if err != nil {
+		return fmt.Errorf("marshal cluster info: %w", err)
+	}
+
+	infoPath := filepath.Join(laneDir, "cluster_info.json")
+
+	if err := os.WriteFile(infoPath, infoJSON, 0644); err != nil {
+		return fmt.Errorf("write %s: %w", infoPath, err)
+	}
+
+	// ---------------------------------------------------------------------
+	// cluster_script.sh
+	// ---------------------------------------------------------------------
+
+	script := fmt.Sprintf(`#!/usr/bin/env bash
+# cryoSPARC cluster submission script template for SLURM
+# Lane: %s
+
+{# This template uses jinja2 syntax. #}
+
+# Available variables:
+#  script_path_abs={{ script_path_abs }}
+#  run_cmd={{ run_cmd }}
+#  num_cpu={{ num_cpu }}
+#  num_gpu={{ num_gpu }}
+#  ram_gb={{ ram_gb }}
+#  job_dir_abs={{ job_dir_abs }}
+#  project_dir_abs={{ project_dir_abs }}
+#  job_log_path_abs={{ job_log_path_abs }}
+#  worker_bin_path={{ worker_bin_path }}
+#  run_args={{ run_args }}
+#  project_uid={{ project_uid }}
+#  job_uid={{ job_uid }}
+#  job_creator={{ job_creator }}
+#  cryosparc_username={{ cryosparc_username }}
+
+#SBATCH --job-name=cryosparc_{{ project_uid }}_{{ job_uid }}
+#SBATCH --output={{ job_log_path_abs }}.out
+#SBATCH --error={{ job_log_path_abs }}.err
+#SBATCH --ntasks=1
+#SBATCH --mem={{ (%s * 1000)|int }}M
+#SBATCH --time=%s
+#SBATCH --partition=%s
+#SBATCH --cluster=%s
+#SBATCH --gres=gpu:{{ %s }}
+#SBATCH --cpus-per-task={{ %s }}
+
+echo "Job Id: $SLURM_JOBID"
+echo "Host:   $SLURM_NODELIST"
+
+module purge
+
+srun {{ run_cmd }}
+
+EXIT_CODE=$?
+echo "Exit code: $EXIT_CODE"
+exit $EXIT_CODE
+{%%- endif %%}
+`, name, memory, time, partition, cluster, gpus, cpuspertask)
+
+	scriptPath := filepath.Join(laneDir, "cluster_script.sh")
+
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		return fmt.Errorf("write %s: %w", scriptPath, err)
 	}
 
 	return nil
