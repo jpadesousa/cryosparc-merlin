@@ -15,14 +15,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
-var ErrInstallationCancelled = errors.New("installation cancelled by user")
+var ErrCancelled = errors.New("cancelled by user")
 
 // =============================================================================
 // Cryosparcm command
 // =============================================================================
-func cryosparcmCmd(hostname, cryosparcpath string, help bool, args ...string) *exec.Cmd {
+func cryosparcmCmd(hostname, cryosparcpath, commandpath string, help bool, args ...string) *exec.Cmd {
 
 	var cmd *exec.Cmd
 
@@ -32,6 +33,13 @@ func cryosparcmCmd(hostname, cryosparcpath string, help bool, args ...string) *e
 		remoteCmd = append(remoteCmd,
 			"--dir",
 			filepath.Join(cryosparcpath, "cryosparc_master"),
+		)
+	}
+
+	if commandpath != "" {
+		remoteCmd = append(remoteCmd,
+			"--cwd",
+			commandpath,
 		)
 	}
 
@@ -191,6 +199,106 @@ func (i *Command) createDirectory(_ func(float64), path string) error {
 		return err
 	}
 	return nil
+}
+
+// =============================================================================
+// Create backup
+// =============================================================================
+func (i *Command) backupCryosparcDatabase(_ func(float64), cryosparcpath, dbpath, backuppath string) error {
+
+	var version string
+
+	date := time.Now().Format("2006-01-02T15:04:05")
+
+	versionData, err := os.ReadFile(
+		filepath.Join(cryosparcpath, "cryosparc_master", "version"))
+
+	if err == nil {
+		version = strings.TrimSpace(string(versionData))
+		version = strings.TrimPrefix(version, "v")
+	} else {
+		return fmt.Errorf("cryoSPARC version not found: %w", err)
+	}
+
+	baseName := filepath.Base(filepath.Clean(dbpath))
+	destination := filepath.Join(
+		backuppath,
+		fmt.Sprintf("%s.v%s.%s.backup", baseName, version, date),
+	)
+
+	if err := copyDir(dbpath, destination); err != nil {
+		return fmt.Errorf("create backup: %w", err)
+	}
+
+	return nil
+}
+
+func copyDir(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := copyFile(srcPath, dstPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := in.Close(); err != nil {
+			log.Printf("failed to close file: %v", err)
+		}
+	}()
+
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+
+	out, err := os.OpenFile(
+		dst,
+		os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
+		info.Mode().Perm(),
+	)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := out.Close(); err != nil {
+			log.Printf("failed to close file: %v", err)
+		}
+	}()
+
+	_, err = io.Copy(out, in)
+	return err
 }
 
 // =============================================================================
@@ -360,10 +468,13 @@ func (i *Command) installMaster(
 
 	if err == nil {
 		version := strings.TrimSpace(string(versionData))
+		version = strings.TrimPrefix(version, "v")
+
 		major, _, ok := strings.Cut(version, ".")
 		if !ok {
 			major = version
 		}
+
 		if majorVersion, err := strconv.Atoi(major); err == nil && majorVersion >= 5 {
 			args = append(args, "--ignore-port-conflicts")
 		}
@@ -460,17 +571,9 @@ func (i *Command) replaceLicenseID(_ func(float64), installDir, license string) 
 	return nil
 }
 
-// go run . cryosparcm --cryosparc-path /data/user/agosti_j/cryosparc_beta/ cluster connect --help
-
-//  Usage: cryosparcm cluster connect [OPTIONS]
-
-//  Create or update a cluster with cluster_info.json and cluster_script.sh.
-
-// ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-// │ --info          FILE  [default: cluster_info.json]                                                                                                                                       │
-// │ --script        FILE  [default: cluster_script.sh]                                                                                                                                       │
-// │ --help                Show this message and exit.                                                                                                                                        │
-// ╰──────────────────────────────
+// =============================================================================
+// Create new lane
+// =============================================================================
 
 type ClusterInfo struct {
 	Name          string `json:"name"`
@@ -557,7 +660,11 @@ func (i *Command) CreateLane(
 	// cluster_script.sh
 	// ---------------------------------------------------------------------
 
-	script := fmt.Sprintf(`#!/usr/bin/env bash
+	var script string
+
+	if cluster == "gmerlin7" {
+		script = fmt.Sprintf(`#!/usr/bin/env bash
+
 # cryoSPARC cluster submission script template for SLURM
 # Lane: %s
 
@@ -590,6 +697,13 @@ func (i *Command) CreateLane(
 #SBATCH --gres=gpu:{{ %s }}
 #SBATCH --cpus-per-task={{ %s }}
 
+{%%- if num_gpu == 0 %%}
+# Use CPU cluster
+echo "Error: No GPU requested. Use a CPU lane instead." >&2
+exit 1
+{%%- else %%}
+
+# Print hostname, for debugging
 echo "Job Id: $SLURM_JOBID"
 echo "Host:   $SLURM_NODELIST"
 
@@ -599,9 +713,63 @@ srun {{ run_cmd }}
 
 EXIT_CODE=$?
 echo "Exit code: $EXIT_CODE"
-exit $EXIT_CODE
+exit $?
 {%%- endif %%}
 `, name, memory, time, partition, cluster, gpus, cpuspertask)
+	} else {
+		script = fmt.Sprintf(`#!/usr/bin/env bash
+
+# cryoSPARC cluster submission script template for SLURM
+# Lane: %s
+
+{# This template uses jinja2 syntax. #}
+
+# Available variables:
+#  script_path_abs={{ script_path_abs }}
+#  run_cmd={{ run_cmd }}
+#  num_cpu={{ num_cpu }}
+#  num_gpu={{ num_gpu }}
+#  ram_gb={{ ram_gb }}
+#  job_dir_abs={{ job_dir_abs }}
+#  project_dir_abs={{ project_dir_abs }}
+#  job_log_path_abs={{ job_log_path_abs }}
+#  worker_bin_path={{ worker_bin_path }}
+#  run_args={{ run_args }}
+#  project_uid={{ project_uid }}
+#  job_uid={{ job_uid }}
+#  job_creator={{ job_creator }}
+#  cryosparc_username={{ cryosparc_username }}
+
+#SBATCH --job-name=cryosparc_{{ project_uid }}_{{ job_uid }}
+#SBATCH --output={{ job_log_path_abs }}.out
+#SBATCH --error={{ job_log_path_abs }}.err
+#SBATCH --ntasks=1
+#SBATCH --mem={{ (%s * 1000)|int }}M
+#SBATCH --time=%s
+#SBATCH --partition=%s
+#SBATCH --cluster=%s
+#SBATCH --cpus-per-task={{ %s }}
+
+{%%- if num_gpu > 0 %%}
+# Use GPU cluster
+echo "Error: GPU requested. Use a GPU lane instead." >&2
+exit 1
+{%%- else %%}
+
+# Print hostname, for debugging
+echo "Job Id: $SLURM_JOBID"
+echo "Host:   $SLURM_NODELIST"
+
+module purge
+
+srun {{ run_cmd }}
+
+EXIT_CODE=$?
+echo "Exit code: $EXIT_CODE"
+exit $?
+{%%- endif %%}
+`, name, memory, time, partition, cluster, cpuspertask)
+	}
 
 	scriptPath := filepath.Join(laneDir, "cluster_script.sh")
 

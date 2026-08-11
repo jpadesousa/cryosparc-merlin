@@ -34,7 +34,6 @@ var (
 	defaultArch          = "x86_64"
 
 	// Lanes
-	defaultLaneName        = "gpu-hourly"
 	defaultLaneMemory      = "ram_gb"
 	defaultLaneGpus        = "num_gpu"
 	defaultLaneCpusPerTask = "num_cpu"
@@ -155,8 +154,32 @@ func main() {
 		runCmd((*command.Command).RunLanesCreateCmd),
 	)
 
+	lanesCreateDefaultCmd := newCommand(
+		"default",
+		"Install the default CryoSPARC lanes",
+		runCmd((*command.Command).RunLanesCreateDefaultCmd),
+	)
+
+	lanesCreateCmd.AddCommand(
+		lanesCreateDefaultCmd,
+	)
+
+	lanesInstallCmd := newCommand(
+		"install",
+		"Install a CryoSPARC lane",
+		runCmd((*command.Command).RunLanesInstallCmd),
+	)
+
+	lanesRemoveCmd := newCommand(
+		"remove",
+		"Remove a CryoSPARC lane",
+		runCmd((*command.Command).RunLanesRemoveCmd),
+	)
+
 	lanesCmd.AddCommand(
 		lanesCreateCmd,
+		lanesInstallCmd,
+		lanesRemoveCmd,
 	)
 
 	// Base commands
@@ -196,6 +219,17 @@ func main() {
 	addCommonLanesFlags(lanesCreateCmd)
 	addLanesCreateFlags(lanesCreateCmd)
 
+	// create default
+	addCommonLanesFlags(lanesCreateDefaultCmd)
+
+	// install
+	addCommonLanesFlags(lanesInstallCmd)
+	addLanesInstallFlags(lanesInstallCmd)
+
+	// remove
+	addCommonLanesFlags(lanesRemoveCmd)
+	addLanesRemoveFlags(lanesRemoveCmd)
+
 	// =============================================
 	// Execute app
 	// =============================================
@@ -206,7 +240,7 @@ func main() {
 
 	// Execute cobra command
 	if err := fang.Execute(context.Background(), cobraCmd); err != nil {
-		fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n\n", cobraCmd.CommandPath())
+		// fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n\n", cobraCmd.CommandPath())
 		os.Exit(1)
 	}
 }
@@ -247,8 +281,7 @@ func prepareConfig(cmd *cobra.Command) {
 // =============================================================================
 // Run Commands
 // =============================================================================
-
-func runHelpCmd(cmd *cobra.Command, args []string) error {
+func runHelpCmd(cmd *cobra.Command, _ []string) error {
 	return cmd.Help()
 }
 
@@ -278,15 +311,15 @@ func runCmdArgs(fn func(*command.Command, []string) error) func(*cobra.Command, 
 func addCryosparcmFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
-	flags.StringVar(&cfg.CryosparcPath, "cryosparc-path", defaultCryosparcPath,
+	flags.StringVarP(&cfg.CryosparcPath, "cryosparc-path", "d", defaultCryosparcPath,
 		"Installation directory for CryoSPARC",
 	)
 
-	flags.StringVar(&cfg.HostName, "hostname", defaultHostName,
+	flags.StringVarP(&cfg.HostName, "hostname", "n", defaultHostName,
 		"Hostname used to access the CryoSPARC web interface",
 	)
 
-	flags.BoolVar(&cfg.CryosparcmHelp, "list-commands", false,
+	flags.BoolVarP(&cfg.CryosparcmHelp, "list-commands", "l", false,
 		"List cryosparcm commands (only available from version 5)",
 	)
 
@@ -304,7 +337,7 @@ func addCommonInstallFlags(cmd *cobra.Command) {
 	flags.StringVar(&cfg.Version, "version", defaultVersion,
 		"CryoSPARC version to install",
 	)
-	flags.StringVar(&cfg.CryosparcPath, "cryosparc-path", defaultCryosparcPath,
+	flags.StringVarP(&cfg.CryosparcPath, "cryosparc-path", "d", defaultCryosparcPath,
 		"Installation directory for CryoSPARC",
 	)
 
@@ -369,7 +402,7 @@ func addInstallCompleteFlags(cmd *cobra.Command) {
 func addCommonLanesFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
-	flags.StringVar(&cfg.CryosparcPath, "cryosparc-path", defaultCryosparcPath,
+	flags.StringVarP(&cfg.CryosparcPath, "cryosparc-path", "d", defaultCryosparcPath,
 		"Installation directory for CryoSPARC",
 	)
 
@@ -380,36 +413,66 @@ func addCommonLanesFlags(cmd *cobra.Command) {
 func addLanesCreateFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
-	flags.StringVar(&cfg.LanesCreate.Name, "name", defaultLaneName,
+	flags.StringVar(&cfg.Lanes.Name, "name", "",
 		"Lane name",
 	)
 
-	flags.StringVar(&cfg.LanesCreate.CachePath, "cache-path", defaultLaneCachePath,
+	flags.StringVar(&cfg.Lanes.CachePath, "cache-path", defaultLaneCachePath,
 		"Cache directory",
 	)
 
-	flags.StringVar(&cfg.LanesCreate.Cluster, "cluster", defaultLaneCluster,
+	flags.StringVar(&cfg.Lanes.Cluster, "cluster", defaultLaneCluster,
 		"Cluster name (merlin7 or gmerlin7)",
 	)
 
-	flags.StringVar(&cfg.LanesCreate.Memory, "memory", defaultLaneMemory,
+	flags.StringVar(&cfg.Lanes.Memory, "memory", defaultLaneMemory,
 		"Memory requested for the job (in Gb) (default: set by CryoSPARC)",
 	)
 
-	flags.StringVar(&cfg.LanesCreate.Time, "time", defaultLaneTime,
+	flags.StringVar(&cfg.Lanes.Time, "time", defaultLaneTime,
 		"Time requested for the job (format: dd-hh:mm:ss)",
 	)
 
-	flags.StringVar(&cfg.LanesCreate.Partition, "partition", defaultLanePartition,
+	flags.StringVar(&cfg.Lanes.Partition, "partition", defaultLanePartition,
 		"Partition requested for the job (e.g., cpu-hourly or gpu-hourly)",
 	)
 
-	flags.StringVar(&cfg.LanesCreate.Gpus, "gpus", defaultLaneGpus,
+	flags.StringVar(&cfg.Lanes.Gpus, "gpus", defaultLaneGpus,
 		"Number of GPUs requested for the job (default: set by CryoSPARC)",
 	)
 
-	flags.StringVar(&cfg.LanesCreate.CpusPerTask, "cpus-per-task", defaultLaneCpusPerTask,
+	flags.StringVar(&cfg.Lanes.CpusPerTask, "cpus-per-task", defaultLaneCpusPerTask,
 		"Number of CPUs per task requested for the job (default: set by CryoSPARC)",
+	)
+
+	_ = cmd.MarkFlagRequired("name")
+}
+
+func addLanesInstallFlags(cmd *cobra.Command) {
+	flags := cmd.Flags()
+
+	flags.StringVar(&cfg.Lanes.Name, "name", "",
+		"Lane name",
+	)
+
+	flags.StringVar(&cfg.Lanes.Info, "info", "",
+		"Directory of the cluster_info.json file (only available from version 5)",
+	)
+
+	flags.StringVar(&cfg.Lanes.Script, "script", "",
+		"Directory of the cluster_script.sh file (only available from version 5)",
+	)
+
+	flags.BoolVar(&cfg.Lanes.InstallAll, "all", false,
+		"Install all lanes stored in the CryoSPARC directory",
+	)
+}
+
+func addLanesRemoveFlags(cmd *cobra.Command) {
+	flags := cmd.Flags()
+
+	flags.StringVar(&cfg.Lanes.Name, "name", "",
+		"Lane name",
 	)
 
 	_ = cmd.MarkFlagRequired("name")

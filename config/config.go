@@ -14,7 +14,7 @@ type Config struct {
 	CryosparcmHelp bool
 	BasePort       uint
 
-	LanesCreate struct {
+	Lanes struct {
 		Name        string
 		CachePath   string
 		Cluster     string
@@ -23,5 +23,8 @@ type Config struct {
 		Partition   string
 		Gpus        string
 		CpusPerTask string
+		Info        string
+		Script      string
+		InstallAll  bool
 	}
 }
