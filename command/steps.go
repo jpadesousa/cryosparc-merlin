@@ -16,10 +16,15 @@ import (
 // =============================================================================
 // cryosparcm commands Steps
 // =============================================================================
+func (i *Command) CryosparcmStep(
+	hostname,
+	cryosparcpath string,
+	help bool,
+	args ...string) ui.Step {
 
-func (i *Command) CryosparcmStep(hostname, cryosparcpath string, help bool, args ...string) ui.Step {
 	return ui.Step{
-		Message:          fmt.Sprintf("Running cryosparcm %s", strings.Join(args, " ")),
+		Message: fmt.Sprintf(
+			"Running cryosparcm %s (instance: %s)", strings.Join(args, " "), cryosparcpath),
 		CompletedMessage: "",
 		Exec: func() *exec.Cmd {
 			return cryosparcmCmd(hostname, cryosparcpath, "", help, args...)
@@ -27,9 +32,13 @@ func (i *Command) CryosparcmStep(hostname, cryosparcpath string, help bool, args
 	}
 }
 
-func (i *Command) CryosparcmStartStep(hostname, cryosparcpath string, help bool) ui.Step {
+func (i *Command) CryosparcmStartStep(
+	hostname,
+	cryosparcpath string,
+	help bool) ui.Step {
+
 	return ui.Step{
-		Message:          "Starting CryoSPARC instance",
+		Message:          fmt.Sprintf("Starting CryoSPARC (instance: %s)", cryosparcpath),
 		CompletedMessage: "",
 		Exec: func() *exec.Cmd {
 			return cryosparcmCmd(hostname, cryosparcpath, "", help, "start")
@@ -37,12 +46,29 @@ func (i *Command) CryosparcmStartStep(hostname, cryosparcpath string, help bool)
 	}
 }
 
-func (i *Command) CryosparcmCreateUserStep(hostname, cryosparcpath string, help bool) ui.Step {
+func (i *Command) CryosparcmStopStep(
+	hostname,
+	cryosparcpath string,
+	help bool) ui.Step {
+
+	return ui.Step{
+		Message:          fmt.Sprintf("Stopping CryoSPARC (instance: %s)", cryosparcpath),
+		CompletedMessage: "",
+		Exec: func() *exec.Cmd {
+			return cryosparcmCmd(hostname, cryosparcpath, "", help, "stop")
+		},
+	}
+}
+
+func (i *Command) CryosparcmCreateUserStep(
+	hostname,
+	cryosparcpath string,
+	help bool) ui.Step {
 
 	var password, email, username, firstName, lastName string
 
 	return ui.Step{
-		Message:          "Creating CryoSPARC user",
+		Message:          fmt.Sprintf("Creating CryoSPARC user (instance: %s)", cryosparcpath),
 		CompletedMessage: "",
 		Condition: func() (bool, error) {
 
@@ -51,6 +77,9 @@ func (i *Command) CryosparcmCreateUserStep(hostname, cryosparcpath string, help 
 		Prompt: func() *huh.Form {
 			return huh.NewForm(
 				huh.NewGroup(
+					huh.NewNote().
+						Title("Create CryoSPARC user"),
+
 					huh.NewInput().
 						Title("Email").
 						Validate(func(s string) error {
@@ -62,7 +91,7 @@ func (i *Command) CryosparcmCreateUserStep(hostname, cryosparcpath string, help 
 						Value(&email),
 
 					huh.NewInput().
-						Title("Password").
+						Title("Password (different from your PSI password)").
 						EchoMode(huh.EchoModePassword).
 						Validate(func(s string) error {
 							if s == "" {
@@ -102,7 +131,8 @@ func (i *Command) CryosparcmCreateUserStep(hostname, cryosparcpath string, help 
 					major = version
 				}
 
-				if majorVersion, err := strconv.Atoi(major); err == nil && majorVersion >= 5 {
+				if majorVersion, err := strconv.Atoi(major); err == nil &&
+					majorVersion >= 5 {
 					args = append(args, "user", "create")
 				}
 			} else {
@@ -127,65 +157,17 @@ func (i *Command) CryosparcmCreateUserStep(hostname, cryosparcpath string, help 
 }
 
 // =============================================================================
-// Create CryosparcPath Step
-// =============================================================================
-func (i *Command) createCryosparcPathStep(cryosparcpath string) ui.Step {
-	var action string
-
-	return ui.Step{
-		Message:          fmt.Sprintf("Creating CryoSPARC directory %s", cryosparcpath),
-		CompletedMessage: fmt.Sprintf("Created CryoSPARC directory %s", cryosparcpath),
-		Condition: func() (bool, error) {
-
-			return directoryExistsAndNotEmpty(cryosparcpath)
-		},
-		Prompt: func() *huh.Form {
-			return huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[string]().
-						Title(fmt.Sprintf(
-							"%q already exists",
-							cryosparcpath,
-						)).
-						Options(
-							huh.NewOption("Overwrite installation", "overwrite"),
-							huh.NewOption("Cancel installation", "cancel"),
-						).
-						Value(&action),
-				),
-			)
-		},
-		Action: func(update func(float64)) error {
-			switch action {
-
-			case "cancel":
-				return ErrCancelled
-
-			case "overwrite":
-				if err := os.RemoveAll(cryosparcpath); err != nil {
-					return err
-				}
-				return i.createDirectory(update, cryosparcpath)
-
-			default:
-				return i.createDirectory(update, cryosparcpath)
-
-			}
-		},
-	}
-}
-
-// =============================================================================
 // Check Install Directory
 // =============================================================================
 func (i *Command) checkInstallDirStep(installDir string) ui.Step {
 	var action string
 
 	return ui.Step{
-		Message:          fmt.Sprintf("Checking installation directory %s", installDir),
-		CompletedMessage: fmt.Sprintf("Created installation directory %s", installDir),
+		Message: fmt.Sprintf(
+			"Preparing installation directory %s", installDir),
+		CompletedMessage: fmt.Sprintf(
+			"Created installation directory %s", installDir),
 		Condition: func() (bool, error) {
-
 			return directoryExistsAndNotEmpty(installDir)
 		},
 		Prompt: func() *huh.Form {
@@ -211,6 +193,7 @@ func (i *Command) checkInstallDirStep(installDir string) ui.Step {
 				return ErrCancelled
 
 			case "overwrite":
+
 				if err := os.RemoveAll(installDir); err != nil {
 					return err
 				}
@@ -228,13 +211,28 @@ func (i *Command) checkInstallDirStep(installDir string) ui.Step {
 // =============================================================================
 // Backup CryoSPARC database
 // =============================================================================
-
-func (i *Command) backupCryosparcDatabaseStep(cryosparcpath, dbpath, backupdir string) ui.Step {
+func (i *Command) backupCryosparcDatabaseStep(
+	cryosparcpath,
+	dbpath,
+	backupdir string) ui.Step {
 	return ui.Step{
-		Message:          fmt.Sprintf("Backing up CryoSPARC database (%s)", dbpath),
-		CompletedMessage: fmt.Sprintf("Backed up CryoSPARC database (%s)", backupdir),
+		Message: fmt.Sprintf(
+			"Backing up CryoSPARC database (%s)", dbpath),
+		CompletedMessage: fmt.Sprintf(
+			"Backed up CryoSPARC database (destination: %s)", backupdir),
+		Skip: func() bool {
+			exists, _ := directoryExistsAndNotEmpty(dbpath)
+			return !exists
+		},
+		SkipMessage: fmt.Sprintf(
+			"Database backup skipped: Previous database is empty or does not exist (%s)",
+			dbpath),
 		Action: func(update func(float64)) error {
-			return i.backupCryosparcDatabase(update, cryosparcpath, dbpath, backupdir)
+			return i.backupCryosparcDatabase(
+				update,
+				cryosparcpath,
+				dbpath,
+				backupdir)
 		},
 	}
 }
@@ -246,8 +244,10 @@ func (i *Command) createDbPathStep(dbpath string) ui.Step {
 	var action string
 
 	return ui.Step{
-		Message:          fmt.Sprintf("Creating database directory %s", dbpath),
-		CompletedMessage: fmt.Sprintf("Created database directory %s", dbpath),
+		Message: fmt.Sprintf(
+			"Creating database directory %s", dbpath),
+		CompletedMessage: fmt.Sprintf(
+			"Created database directory %s", dbpath),
 		Condition: func() (bool, error) {
 
 			return directoryExistsAndNotEmpty(dbpath)
@@ -262,18 +262,12 @@ func (i *Command) createDbPathStep(dbpath string) ui.Step {
 						)).
 						Options(
 							huh.NewOption("Overwrite database", "overwrite"),
-							huh.NewOption(
-								"Continue with existing database\n(warning: database cannot be shared between instances)", "continue"),
 							huh.NewOption("Cancel installation", "cancel"),
 						).
 						Value(&action),
 				),
 			)
 		},
-		Skip: func() bool {
-			return action == "continue"
-		},
-		SkipMessage: "Using existing database",
 		Action: func(update func(float64)) error {
 			switch action {
 			case "cancel":
@@ -284,10 +278,6 @@ func (i *Command) createDbPathStep(dbpath string) ui.Step {
 					return err
 				}
 				return i.createDirectory(update, dbpath)
-
-			case "continue":
-				// Should never be reached because Skip() handled it.
-				return nil
 
 			default:
 				return i.createDirectory(update, dbpath)
@@ -302,10 +292,18 @@ func (i *Command) createDbPathStep(dbpath string) ui.Step {
 // =============================================================================
 var newDownloadDir string
 
-func (i *Command) downloadCryosparcStep(downloaddir, release, license, installation, arch string) ui.Step {
+func (i *Command) downloadCryosparcStep(
+	downloaddir,
+	release,
+	license,
+	installation,
+	arch string) ui.Step {
+
 	return ui.Step{
-		Message:          fmt.Sprintf("Downloading CryoSPARC %s v%s arch=%s", installation, release, arch),
-		CompletedMessage: fmt.Sprintf("Downloaded CryoSPARC %s v%s arch=%s", installation, release, arch),
+		Message: fmt.Sprintf(
+			"Downloading CryoSPARC %s v%s arch=%s", installation, release, arch),
+		CompletedMessage: fmt.Sprintf(
+			"Downloaded CryoSPARC %s v%s arch=%s", installation, release, arch),
 		Skip: func() bool {
 
 			basePath := fmt.Sprintf(
@@ -326,12 +324,23 @@ func (i *Command) downloadCryosparcStep(downloaddir, release, license, installat
 				return true
 			}
 			return false
+
 		},
-		SkipMessage:     fmt.Sprintf("CryoSPARC %s v%s arch=%s was already downloaded", installation, release, arch),
+		SkipMessage: fmt.Sprintf(
+			"CryoSPARC %s v%s arch=%s was already downloaded",
+			installation,
+			release,
+			arch),
 		ShowProgressBar: true,
 		Action: func(update func(float64)) error {
 
-			return i.downloadCryosparc(update, downloaddir, release, license, installation, arch)
+			return i.downloadCryosparc(
+				update,
+				downloaddir,
+				release,
+				license,
+				installation,
+				arch)
 		},
 	}
 }
@@ -339,10 +348,17 @@ func (i *Command) downloadCryosparcStep(downloaddir, release, license, installat
 // =============================================================================
 // Extract Archive Step
 // =============================================================================
-func (i *Command) ExtractArchiveStep(extractdir, release, installation, arch string) ui.Step {
+func (i *Command) ExtractArchiveStep(
+	extractdir,
+	release,
+	installation,
+	arch string) ui.Step {
+
 	return ui.Step{
-		Message:          fmt.Sprintf("Extracting CryoSPARC %s v%s arch=%s", installation, release, arch),
-		CompletedMessage: fmt.Sprintf("Extracted CryoSPARC %s v%s arch=%s", installation, release, arch),
+		Message: fmt.Sprintf(
+			"Extracting CryoSPARC %s v%s arch=%s", installation, release, arch),
+		CompletedMessage: fmt.Sprintf(
+			"Extracted CryoSPARC %s v%s arch=%s", installation, release, arch),
 		Action: func(update func(float64)) error {
 
 			var downloaddir string
@@ -353,7 +369,11 @@ func (i *Command) ExtractArchiveStep(extractdir, release, installation, arch str
 				downloaddir = extractdir
 			}
 
-			return i.extractArchive(update, downloaddir, extractdir, fmt.Sprintf("cryosparc_%s.tar.gz", installation))
+			return i.extractArchive(
+				update,
+				downloaddir,
+				extractdir,
+				fmt.Sprintf("cryosparc_%s.tar.gz", installation))
 		},
 	}
 }
@@ -361,14 +381,30 @@ func (i *Command) ExtractArchiveStep(extractdir, release, installation, arch str
 // =============================================================================
 // Install Master Step
 // =============================================================================
-func (i *Command) InstallMasterStep(cryosparcpath, release, license, hostname, dbpath, ssdpath, arch string, baseport uint) ui.Step {
+func (i *Command) InstallMasterStep(
+	cryosparcpath,
+	release,
+	license,
+	hostname,
+	dbpath,
+	ssdpath,
+	arch string,
+	baseport uint) ui.Step {
+
 	return ui.Step{
-		Message: fmt.Sprintf("Installing CryoSPARC master v%s arch=%s", release, arch),
-		// CompletedMessage: fmt.Sprintf("Installed CryoSPARC master v%s arch=%s", release, arch),
+		Message: fmt.Sprintf(
+			"Installing CryoSPARC master v%s arch=%s", release, arch),
 		CompletedMessage: "",
 		Exec: func() *exec.Cmd {
 
-			return i.installMaster(cryosparcpath, license, hostname, dbpath, ssdpath, arch, baseport)
+			return i.installMaster(
+				cryosparcpath,
+				license,
+				hostname,
+				dbpath,
+				ssdpath,
+				arch,
+				baseport)
 		},
 	}
 }
@@ -376,36 +412,52 @@ func (i *Command) InstallMasterStep(cryosparcpath, release, license, hostname, d
 // =============================================================================
 // Install Worker Step
 // =============================================================================
-func (i *Command) InstallWorkerStep(cryosparcpath, release, license, arch string) ui.Step {
+func (i *Command) InstallWorkerStep(
+	cryosparcpath,
+	release,
+	license,
+	arch string) ui.Step {
+
 	return ui.Step{
-		Message: fmt.Sprintf("Installing CryoSPARC worker v%s arch=%s", release, arch),
-		// CompletedMessage: fmt.Sprintf("Installed CryoSPARC worker v%s arch=%s", release, arch),
+		Message: fmt.Sprintf(
+			"Installing CryoSPARC worker v%s arch=%s", release, arch),
 		CompletedMessage: "",
 		Exec: func() *exec.Cmd {
 
-			return i.installWorker(cryosparcpath, license, arch)
+			return i.installWorker(
+				cryosparcpath,
+				license,
+				arch)
 		},
 	}
+
 }
 
 // =============================================================================
 // Replace license ID in config.sh Step
 // =============================================================================
-func (i *Command) replaceLicenseIDStep(installDir, license, installation string) ui.Step {
-	return ui.Step{
-		Message:          fmt.Sprintf("Checking CryoSPARC %s License ID", installation),
-		CompletedMessage: fmt.Sprintf("Checked CryoSPARC %s License ID", installation),
-		Action: func(update func(float64)) error {
+func (i *Command) replaceLicenseIDStep(
+	installDir,
+	license,
+	installation string) ui.Step {
 
+	return ui.Step{
+		Message: fmt.Sprintf(
+			"Checking CryoSPARC %s License ID", installation),
+		CompletedMessage: fmt.Sprintf(
+			"Checked CryoSPARC %s License ID", installation),
+		Action: func(update func(float64)) error {
 			return i.replaceLicenseID(update, installDir, license)
 		},
 	}
 }
 
 // =============================================================================
-// Lanes Steps
+// Lanes Steps (single lanes)
 // =============================================================================
-func (i *Command) RunLanesCreateStep(
+
+// create
+func (i *Command) LanesCreateStep(
 	cryosparcpath,
 	name,
 	cachepath,
@@ -440,7 +492,8 @@ func (i *Command) RunLanesCreateStep(
 	}
 }
 
-func (i *Command) RunLanesInstallStep(
+// install
+func (i *Command) LanesInstallStep(
 	hostname,
 	cryosparcpath,
 	lanepath,
@@ -448,8 +501,12 @@ func (i *Command) RunLanesInstallStep(
 	script string,
 	help bool) ui.Step {
 	return ui.Step{
-		Message:          "Installing CryoSPARC lane",
-		CompletedMessage: "",
+		Message: fmt.Sprintf("Installing CryoSPARC lane (instance: %s)",
+			cryosparcpath,
+		),
+		CompletedMessage: fmt.Sprintf("Installed CryoSPARC lane (instance: %s)",
+			cryosparcpath,
+		),
 		Exec: func() *exec.Cmd {
 
 			cmdArgs := append([]string{"cluster", "connect"},
@@ -469,9 +526,15 @@ func (i *Command) RunLanesInstallStep(
 	}
 }
 
-func (i *Command) RunLanesRemoveStep(hostname, cryosparcpath, name string, help bool) ui.Step {
+// remove
+func (i *Command) LanesRemoveStep(
+	hostname,
+	cryosparcpath,
+	name string,
+	help bool) ui.Step {
+
 	return ui.Step{
-		Message: fmt.Sprintf("Removing CryoSPARC lane (%s)",
+		Message: fmt.Sprintf("Removing CryoSPARC lane from database (%s)",
 			name,
 		),
 		CompletedMessage: "",
@@ -484,12 +547,25 @@ func (i *Command) RunLanesRemoveStep(hostname, cryosparcpath, name string, help 
 	}
 }
 
-func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, gpus, cpuspertask string) []ui.Step {
+// =============================================================================
+// Lanes Steps (multiple lanes)
+// =============================================================================
+
+// create default
+
+// LanesCreateDefaultSteps creates the default lanes created to run CryoSPARC
+// in the Merlin cluster
+func (i *Command) LanesCreateDefaultSteps(
+	cryosparcpath,
+	cachepath,
+	memory,
+	gpus,
+	cpuspertask string) []ui.Step {
 
 	var arch string
 
 	archData, err := os.ReadFile(
-		filepath.Join(cryosparcpath, "cryosparc_master", "arch"))
+		filepath.Join(cryosparcpath, "cryosparc_worker", "arch"))
 
 	if err == nil {
 		arch = strings.TrimSpace(string(archData))
@@ -498,7 +574,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 	}
 
 	steps := map[string]ui.Step{
-		"cpu-hourly": i.RunLanesCreateStep(
+		"cpu-hourly": i.LanesCreateStep(
 			cryosparcpath,
 			"cpu-hourly",
 			cachepath,
@@ -509,7 +585,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			cpuspertask,
 			"merlin7",
 		),
-		"cpu-daily": i.RunLanesCreateStep(
+		"cpu-daily": i.LanesCreateStep(
 			cryosparcpath,
 			"cpu-daily",
 			cachepath,
@@ -524,7 +600,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 
 	if arch == "aarch64" {
 
-		steps["gh-hourly"] = i.RunLanesCreateStep(
+		steps["gh-hourly"] = i.LanesCreateStep(
 			cryosparcpath,
 			"gh-hourly",
 			cachepath,
@@ -536,7 +612,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["gh-daily"] = i.RunLanesCreateStep(
+		steps["gh-daily"] = i.LanesCreateStep(
 			cryosparcpath,
 			"gh-daily",
 			cachepath,
@@ -548,7 +624,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["gh-daily-4h"] = i.RunLanesCreateStep(
+		steps["gh-daily-4h"] = i.LanesCreateStep(
 			cryosparcpath,
 			"gh-daily-4h",
 			cachepath,
@@ -560,7 +636,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["gh-general-2d"] = i.RunLanesCreateStep(
+		steps["gh-general-2d"] = i.LanesCreateStep(
 			cryosparcpath,
 			"gh-general-2d",
 			cachepath,
@@ -572,7 +648,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["gh-general-2d-100Gb"] = i.RunLanesCreateStep(
+		steps["gh-general-2d-100Gb"] = i.LanesCreateStep(
 			cryosparcpath,
 			"gh-general-2d-100Gb",
 			cachepath,
@@ -585,7 +661,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 		)
 
 	} else {
-		steps["a100-hourly"] = i.RunLanesCreateStep(
+		steps["a100-hourly"] = i.LanesCreateStep(
 			cryosparcpath,
 			"a100-hourly",
 			cachepath,
@@ -597,7 +673,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["a100-daily"] = i.RunLanesCreateStep(
+		steps["a100-daily"] = i.LanesCreateStep(
 			cryosparcpath,
 			"a100-daily",
 			cachepath,
@@ -609,7 +685,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["a100-daily-4h"] = i.RunLanesCreateStep(
+		steps["a100-daily-4h"] = i.LanesCreateStep(
 			cryosparcpath,
 			"a100-daily-4h",
 			cachepath,
@@ -621,7 +697,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["a100-general-2d"] = i.RunLanesCreateStep(
+		steps["a100-general-2d"] = i.LanesCreateStep(
 			cryosparcpath,
 			"a100-general-2d",
 			cachepath,
@@ -633,7 +709,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 			"gmerlin7",
 		)
 
-		steps["a100-general-2d-100Gb"] = i.RunLanesCreateStep(
+		steps["a100-general-2d-100Gb"] = i.LanesCreateStep(
 			cryosparcpath,
 			"a100-general-2d-100Gb",
 			cachepath,
@@ -655,7 +731,7 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 	stepsList := make([]ui.Step, 0, len(steps)+1)
 	stepsList = append(
 		stepsList,
-		i.RunLanesCreateDefaultConfirmStep(cryosparcpath, keys),
+		i.LanesCreateDefaultConfirmStep(cryosparcpath, keys),
 	)
 
 	for key := range steps {
@@ -665,7 +741,11 @@ func (i *Command) RunLanesCreateDefaultSteps(cryosparcpath, cachepath, memory, g
 	return stepsList
 }
 
-func (i *Command) RunLanesCreateDefaultConfirmStep(
+// create default (confirm step)
+
+// LanesCreateDefaultConfirmStep is used to confirm if the creation of all
+// default lanes into cryosparc path can proceed.
+func (i *Command) LanesCreateDefaultConfirmStep(
 	cryosparcPath string,
 	stepNames []string,
 ) ui.Step {
@@ -682,8 +762,9 @@ func (i *Command) RunLanesCreateDefaultConfirmStep(
 				huh.NewGroup(
 					huh.NewConfirm().
 						Title(fmt.Sprintf(
-							"This will create all default lanes in %s:\n\n%s\n\nDo you want to proceed?",
-							cryosparcPath,
+							"This will create all default lanes "+
+								"in %s:\n\n%s\n\nDo you want to proceed?",
+							filepath.Join(cryosparcPath, "lanes"),
 							strings.Join(stepNames, "\n"),
 						)).
 						Affirmative("Confirm").
@@ -702,7 +783,18 @@ func (i *Command) RunLanesCreateDefaultConfirmStep(
 	}
 }
 
-func (i *Command) RunLanesInstallSteps(hostname, cryosparcpath, info, script, name string, all, help bool) []ui.Step {
+// install
+
+// LanesInstallSteps combines the installation of multiple lanes using the
+// previously defined single lane install (RunLanesInstallStep).
+func (i *Command) LanesInstallSteps(
+	hostname,
+	cryosparcpath,
+	info,
+	script,
+	name string,
+	all,
+	help bool) []ui.Step {
 
 	var lanes []string
 
@@ -726,7 +818,9 @@ func (i *Command) RunLanesInstallSteps(hostname, cryosparcpath, info, script, na
 			}
 
 		} else {
-			fmt.Println("no lanes selected. Use '--name' to select a lane to install or '--all' to install all lanes stored in the CryoSPARC directory")
+			fmt.Println("no lanes selected. Use '--name [lane name]' " +
+				"to select a lane to install or '--all' to install all " +
+				"lanes stored in the CryoSPARC directory.")
 			return nil
 		}
 
@@ -736,7 +830,7 @@ func (i *Command) RunLanesInstallSteps(hostname, cryosparcpath, info, script, na
 			script = filepath.Join(lanepath, "cluster_script.sh")
 
 			steps = append(steps,
-				i.RunLanesInstallStep(
+				i.LanesInstallStep(
 					hostname,
 					cryosparcpath,
 					lanepath,
@@ -749,7 +843,7 @@ func (i *Command) RunLanesInstallSteps(hostname, cryosparcpath, info, script, na
 
 	} else {
 		steps = append(steps,
-			i.RunLanesInstallStep(
+			i.LanesInstallStep(
 				hostname,
 				cryosparcpath,
 				"",
@@ -761,4 +855,48 @@ func (i *Command) RunLanesInstallSteps(hostname, cryosparcpath, info, script, na
 	}
 
 	return steps
+}
+
+// =============================================================================
+// HTTP link
+// =============================================================================
+func (i *Command) HttpUrlStep(hostname string, port uint) ui.Step {
+
+	return ui.Step{
+		Message: "",
+		CompletedMessage: fmt.Sprintf("CryoSPARC instance can be accessed on: http://%s:%d",
+			hostname,
+			port,
+		),
+		Action: func(update func(float64)) error {
+			return nil
+		},
+	}
+
+}
+
+// =============================================================================
+// Set CryoSPARC base port
+// =============================================================================
+func (i *Command) setCryosparcBasePortStep(hostname string, port uint) ui.Step {
+
+	return ui.Step{
+		Message: "Setting CryoSPARC base port",
+		CompletedMessage: fmt.Sprintf(
+			"Set CryoSPARC base port to %d", i.cfg.BasePort),
+		Skip: func() bool {
+			if port != 0 {
+				return true
+			}
+
+			return false
+		},
+		SkipMessage: fmt.Sprintf(
+			"CryoSPARC base port was already provided and set to %d", port),
+		Action: func(update func(float64)) error {
+
+			return i.setCryosparcBasePort(hostname, 39500, 40000, 10)
+
+		},
+	}
 }

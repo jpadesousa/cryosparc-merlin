@@ -13,17 +13,10 @@ import (
 )
 
 var (
-	// successStyle sets the text style for completed steps.
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-
-	// skipStyle sets the text style for skipped steps.
-	skipStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
-
-	// infoStyle sets the text style for currently running steps.
-	infoStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-
-	// errorStyle sets the text style for failed steps.
-	errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	skipStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+	infoStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 )
 
 // Progress bar padding
@@ -41,17 +34,16 @@ type stepStatus struct {
 	status  string
 }
 
-// model holds all state for the Bubble Tea program.
 type model struct {
 	spinner  spinner.Model
 	progress progress.Model
 
-	steps     []Step       // Ordered list of steps to execute.
-	history   []stepStatus // It keeps the history of all step types.
-	current   int          // Index of the step currently being executed.
-	completed []string     // Messages for completed steps.
-	skipped   []string     // Messages for skippeds steps.
-	err       error        // First error encountered, if any.
+	steps     []Step       // ordered list of steps to execute
+	history   []stepStatus // it keeps the history of all step types
+	current   int          // index of the step currently being executed
+	completed []string     // messages for completed steps
+	skipped   []string     // messages for skippeds steps
+	err       error        // first error encountered, if any
 
 	form *huh.Form // form to prompt the user
 }
@@ -59,7 +51,7 @@ type model struct {
 // =============================================================================
 // Step
 // =============================================================================
-// Step represents a single unit of work in the progress UI.
+// Step represents a single unit of work in the progress UI
 type Step struct {
 	Message          string
 	CompletedMessage string
@@ -76,7 +68,7 @@ type Step struct {
 	Prompt func() *huh.Form
 }
 
-// stepResult is sent back to the update loop after a step finishes.
+// stepResult is sent back to the update loop after a step finishes
 type stepResult struct {
 	err error
 }
@@ -93,15 +85,13 @@ type stepSkipped struct {
 // progressMsg is a type used when there is a progress output
 type progressMsg float64
 
-// startPrompt
 type startPrompt struct {
 	form *huh.Form
 }
 
 var program *tea.Program
 
-// runStep creates a Bubble Tea command that executes a step asynchronously.
-// When the Action completes, it returns a stepResult message.
+// runStep creates a Bubble Tea command that executes a step asynchronously
 func runStep(step Step) tea.Cmd {
 	return func() tea.Msg {
 		shouldRun := false

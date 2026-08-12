@@ -23,7 +23,12 @@ var ErrCancelled = errors.New("cancelled by user")
 // =============================================================================
 // Cryosparcm command
 // =============================================================================
-func cryosparcmCmd(hostname, cryosparcpath, commandpath string, help bool, args ...string) *exec.Cmd {
+func cryosparcmCmd(
+	hostname,
+	cryosparcpath,
+	commandpath string,
+	help bool,
+	args ...string) *exec.Cmd {
 
 	var cmd *exec.Cmd
 
@@ -45,17 +50,24 @@ func cryosparcmCmd(hostname, cryosparcpath, commandpath string, help bool, args 
 
 	remoteCmd = append(remoteCmd, args...)
 
-	if help || len(args) == 0 {
+	if help {
 
 		cmd = exec.Command(
-			filepath.Join(cryosparcpath, "cryosparc_master", "bin", "cryosparcm"),
+			filepath.Join(
+				cryosparcpath,
+				"cryosparc_master",
+				"bin",
+				"cryosparcm"),
 			"--help",
 		)
 
 	} else if len(args) > 1 && args[len(args)-1] == "--help" {
 
 		cmd = exec.Command(
-			filepath.Join(cryosparcpath, "cryosparc_master", "bin", "cryosparcm"),
+			filepath.Join(cryosparcpath,
+				"cryosparc_master",
+				"bin",
+				"cryosparcm"),
 			args...,
 		)
 
@@ -101,7 +113,14 @@ func (r *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (i *Command) downloadCryosparc(update func(float64), downloaddir, release, license, installation, arch string) error {
+func (i *Command) downloadCryosparc(
+	update func(float64),
+	downloaddir,
+	release,
+	license,
+	installation,
+	arch string) error {
+
 	url := fmt.Sprintf(
 		"https://get.cryosparc.com/download/%s-v%s/%s?arch=%s",
 		installation,
@@ -110,11 +129,17 @@ func (i *Command) downloadCryosparc(update func(float64), downloaddir, release, 
 		arch,
 	)
 
-	archive := filepath.Join(downloaddir, fmt.Sprintf("cryosparc_%s.tar.gz", installation))
+	archive := filepath.Join(
+		downloaddir,
+		fmt.Sprintf("cryosparc_%s.tar.gz",
+			installation))
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("download CryoSPARC %s package: %w", installation, err)
+		return fmt.Errorf(
+			"download CryoSPARC %s package: %w",
+			installation,
+			err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -124,7 +149,9 @@ func (i *Command) downloadCryosparc(update func(float64), downloaddir, release, 
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf(
-			"download failed (HTTP %d). Please check the CryoSPARC release, license ID, architecture, and internet connection",
+			"download failed (HTTP %d). "+
+				"Please check the CryoSPARC release, license ID, "+
+				"architecture, and internet connection",
 			resp.StatusCode,
 		)
 	}
@@ -204,11 +231,18 @@ func (i *Command) createDirectory(_ func(float64), path string) error {
 // =============================================================================
 // Create backup
 // =============================================================================
-func (i *Command) backupCryosparcDatabase(_ func(float64), cryosparcpath, dbpath, backuppath string) error {
+func (i *Command) backupCryosparcDatabase(
+	_ func(float64),
+	cryosparcpath,
+	dbpath,
+	backuppath string) error {
 
 	var version string
+	var destination string
 
 	date := time.Now().Format("2006-01-02T15:04:05")
+
+	baseName := filepath.Base(filepath.Clean(dbpath))
 
 	versionData, err := os.ReadFile(
 		filepath.Join(cryosparcpath, "cryosparc_master", "version"))
@@ -216,15 +250,16 @@ func (i *Command) backupCryosparcDatabase(_ func(float64), cryosparcpath, dbpath
 	if err == nil {
 		version = strings.TrimSpace(string(versionData))
 		version = strings.TrimPrefix(version, "v")
+		destination = filepath.Join(
+			backuppath,
+			fmt.Sprintf("%s.v%s.%s.backup", baseName, version, date),
+		)
 	} else {
-		return fmt.Errorf("cryoSPARC version not found: %w", err)
+		destination = filepath.Join(
+			backuppath,
+			fmt.Sprintf("%s.%s.backup", baseName, date),
+		)
 	}
-
-	baseName := filepath.Base(filepath.Clean(dbpath))
-	destination := filepath.Join(
-		backuppath,
-		fmt.Sprintf("%s.v%s.%s.backup", baseName, version, date),
-	)
 
 	if err := copyDir(dbpath, destination); err != nil {
 		return fmt.Errorf("create backup: %w", err)
@@ -304,7 +339,11 @@ func copyFile(src, dst string) error {
 // =============================================================================
 // Extract archive
 // =============================================================================
-func (i *Command) extractArchive(_ func(float64), downloaddir, extractdir, filename string) error {
+func (i *Command) extractArchive(
+	_ func(float64),
+	downloaddir,
+	extractdir,
+	filename string) error {
 
 	archive := filepath.Join(
 		downloaddir,
@@ -475,7 +514,8 @@ func (i *Command) installMaster(
 			major = version
 		}
 
-		if majorVersion, err := strconv.Atoi(major); err == nil && majorVersion >= 5 {
+		if majorVersion, err := strconv.Atoi(major); err == nil &&
+			majorVersion >= 5 {
 			args = append(args, "--ignore-port-conflicts")
 		}
 	}
@@ -548,7 +588,10 @@ func (i *Command) installWorker(cryosparcpath, license, arch string) *exec.Cmd {
 // Replace CryoSPARC license in config.sh
 // =============================================================================
 
-func (i *Command) replaceLicenseID(_ func(float64), installDir, license string) error {
+func (i *Command) replaceLicenseID(
+	_ func(float64),
+	installDir,
+	license string) error {
 
 	path := filepath.Join(installDir, "config.sh")
 
@@ -625,7 +668,8 @@ func (i *Command) CreateLane(
 		SendCmdTpl: "{{ command }}",
 
 		QsubCmdTpl: fmt.Sprintf(
-			"bash -c 'sbatch --parsable --cluster=%s \"{{ script_path_abs }}\" | cut -d \";\" -f 1'",
+			"bash -c 'sbatch --parsable "+
+				"--cluster=%s \"{{ script_path_abs }}\" | cut -d \";\" -f 1'",
 			cluster,
 		),
 
@@ -776,6 +820,53 @@ exit $?
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 		return fmt.Errorf("write %s: %w", scriptPath, err)
 	}
+
+	return nil
+}
+
+// =============================================================================
+// Set CryoSPARC base port
+// =============================================================================
+
+// setCryosparcBasePort will automatically set a base port for CryoSPARC based
+// on the availabilty of a number contiguous ports on the server running
+// CryoSPARC
+func (i *Command) setCryosparcBasePort(
+	hostname string,
+	startport,
+	endport,
+	count uint) error {
+
+	remoteCmd := []string{
+		"findbaseport",
+		"--start", strconv.FormatUint(uint64(startport), 10),
+		"--end", strconv.FormatUint(uint64(endport), 10),
+		"--count", strconv.FormatUint(uint64(count), 10),
+	}
+
+	cmd := exec.Command(
+		"ssh",
+		fmt.Sprintf("%s@%s", os.Getenv("USER"), hostname),
+		strings.Join(remoteCmd, " "),
+	)
+
+	// Capture stdout instead of sending it directly to the screen.
+	output, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+
+	// Remove whitespace/newline.
+	portStr := strings.TrimSpace(string(output))
+
+	// Convert the output to a number.
+	port, err := strconv.ParseUint(portStr, 10, 16)
+	if err != nil {
+		return fmt.Errorf(
+			"invalid port returned by findbaseport: %q: %w", portStr, err)
+	}
+
+	i.cfg.BasePort = uint(port)
 
 	return nil
 }

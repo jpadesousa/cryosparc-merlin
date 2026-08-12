@@ -2,7 +2,7 @@ package command
 
 func (i *Command) RunLanesCreateCmd() error {
 	return i.runSteps(
-		i.RunLanesCreateStep(
+		i.LanesCreateStep(
 			i.cfg.CryosparcPath,
 			i.cfg.Lanes.Name,
 			i.cfg.Lanes.CachePath,
@@ -17,7 +17,7 @@ func (i *Command) RunLanesCreateCmd() error {
 }
 
 func (i *Command) RunLanesCreateDefaultCmd() error {
-	return i.runSteps(i.RunLanesCreateDefaultSteps(
+	return i.runSteps(i.LanesCreateDefaultSteps(
 		i.cfg.CryosparcPath,
 		i.cfg.Lanes.CachePath,
 		i.cfg.Lanes.Memory,
@@ -26,7 +26,7 @@ func (i *Command) RunLanesCreateDefaultCmd() error {
 }
 
 func (i *Command) RunLanesInstallCmd() error {
-	return i.runSteps(i.RunLanesInstallSteps(
+	return i.runSteps(i.LanesInstallSteps(
 		i.cfg.HostName,
 		i.cfg.CryosparcPath,
 		i.cfg.Lanes.Info,
@@ -38,7 +38,7 @@ func (i *Command) RunLanesInstallCmd() error {
 
 func (i *Command) RunLanesRemoveCmd() error {
 	return i.runSteps(
-		i.RunLanesRemoveStep(
+		i.LanesRemoveStep(
 			i.cfg.HostName,
 			i.cfg.CryosparcPath,
 			i.cfg.Lanes.Name,
