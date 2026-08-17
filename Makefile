@@ -1,8 +1,9 @@
 BINARY := cryosparc-merlin 
+VERSION := dev
 
-.PHONY: all fmt vet lint test build clean
+.PHONY: all fmt vet lint build clean
 
-all: fmt vet lint test build
+all: fmt vet lint build
 
 fmt:
 	go fmt ./...
@@ -11,14 +12,11 @@ vet:
 	go vet ./...
 
 lint:
-	/data/user/agosti_j/go/bin/golangci-lint run
-
-test:
-	go test ./...
+	golangci-lint run
 
 build:
 	mkdir -p bin
-	go build -o bin/$(BINARY)
+	go build -ldflags="-X main.version=$(VERSION)" -o bin/$(BINARY)
 
 clean:
 	rm -rf bin/

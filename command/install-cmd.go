@@ -2,8 +2,15 @@ package command
 
 import (
 	"cryosparc-merlin/ui"
+	"fmt"
 	"os"
 	"path/filepath"
+)
+
+var (
+	portStart uint = 39500 // Start port range to assign new base port
+	portEnd   uint = 40000 // End port range to assign new base port
+	portCount uint = 10    // Number of contiguous ports available
 )
 
 // install complete
@@ -11,13 +18,14 @@ func (i *Command) RunInstallComplete() error {
 
 	steps := []ui.Step{
 
+		// cryosparc_master
 		i.backupCryosparcDatabaseStep(
 			i.cfg.CryosparcPath,
 			i.cfg.DbPath,
 			filepath.Join("/data/user", os.Getenv("USER"), "cryosparc_backup")),
 
 		i.CryosparcmStopStep(
-			i.cfg.HostName, i.cfg.CryosparcPath, i.cfg.CryosparcmHelp),
+			i.cfg.HostName, i.cfg.CryosparcPath, false),
 
 		i.checkInstallDirStep(i.cfg.CryosparcPath),
 
@@ -33,11 +41,17 @@ func (i *Command) RunInstallComplete() error {
 		i.ExtractArchiveStep(
 			i.cfg.CryosparcPath, i.cfg.Version, "master", i.cfg.ArchMaster),
 
-		i.setCryosparcBasePortStep(i.cfg.HostName, i.cfg.BasePort),
+		i.setCryosparcBasePortStep(
+			i.cfg.HostName,
+			i.cfg.BasePort,
+			portStart,
+			portEnd,
+			portCount,
+		),
 
 		i.InstallMasterStep(i.cfg.CryosparcPath, i.cfg.Version, i.cfg.License,
 			i.cfg.HostName, i.cfg.DbPath, i.cfg.SSDPath,
-			i.cfg.ArchMaster, i.cfg.BasePort),
+			i.cfg.ArchMaster),
 
 		i.replaceLicenseIDStep(
 			filepath.Join(i.cfg.CryosparcPath, "cryosparc_master"),
@@ -45,34 +59,58 @@ func (i *Command) RunInstallComplete() error {
 			"master"),
 
 		i.CryosparcmStartStep(
-			i.cfg.HostName, i.cfg.CryosparcPath, i.cfg.CryosparcmHelp),
+			i.cfg.HostName, i.cfg.CryosparcPath, false),
 
 		i.CryosparcmCreateUserStep(
-			i.cfg.HostName, i.cfg.CryosparcPath, i.cfg.CryosparcmHelp),
-
-		i.downloadCryosparcStep(
-			i.cfg.CryosparcPath, i.cfg.Version,
-			i.cfg.License, "worker", i.cfg.ArchWorker),
-
-		i.ExtractArchiveStep(
-			i.cfg.CryosparcPath, i.cfg.Version, "worker", i.cfg.ArchWorker),
-
-		i.InstallWorkerStep(
-			i.cfg.CryosparcPath, i.cfg.Version, i.cfg.License, i.cfg.ArchWorker),
-
-		i.replaceLicenseIDStep(
-			filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
-			i.cfg.License,
-			"worker"),
+			i.cfg.HostName,
+			i.cfg.CryosparcPath,
+			i.cfg.User.Email,
+			i.cfg.User.Username,
+			i.cfg.User.FirstName,
+			i.cfg.User.LastName,
+			false),
 	}
 
-	// Create all default lanes
-	steps = append(steps, i.LanesCreateDefaultSteps(
-		i.cfg.CryosparcPath,
-		i.cfg.Lanes.CachePath,
-		i.cfg.Lanes.Memory,
-		i.cfg.Lanes.Gpus,
-		i.cfg.Lanes.CpusPerTask)...)
+	// cryosparc_worker
+	var archList []string
+
+	if i.cfg.ArchWorker == "both" {
+		archList = []string{"x86_64", "aarch64"}
+	} else {
+		archList = []string{i.cfg.ArchWorker}
+	}
+
+	for _, arch := range archList {
+
+		steps = append(steps,
+
+			i.downloadCryosparcStep(
+				i.cfg.CryosparcPath, i.cfg.Version,
+				i.cfg.License, "worker", arch),
+
+			i.ExtractArchiveStep(
+				i.cfg.CryosparcPath, i.cfg.Version, "worker", arch),
+
+			i.InstallWorkerStep(
+				i.cfg.CryosparcPath, i.cfg.Version, i.cfg.License, arch),
+
+			i.replaceLicenseIDStep(
+				filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
+				i.cfg.License,
+				"worker"),
+
+			i.RenameWorkerDirectoryStep(i.cfg.CryosparcPath, arch),
+		)
+
+		// Create all default lanes
+		steps = append(steps, i.LanesCreateDefaultSteps(
+			i.cfg.CryosparcPath,
+			i.cfg.Lanes.CachePath,
+			i.cfg.Lanes.Memory,
+			i.cfg.Lanes.Gpus,
+			i.cfg.Lanes.CpusPerTask,
+			arch)...)
+	}
 
 	// Install all default lanes
 	steps = append(steps, i.LanesInstallSteps(
@@ -85,8 +123,7 @@ func (i *Command) RunInstallComplete() error {
 		false, // bool to show help (--help)
 	)...)
 
-	// Print HTTP url
-	steps = append(steps, i.HttpUrlStep(i.cfg.HostName, i.cfg.BasePort))
+	steps = append(steps, i.HttpUrlStep(i.cfg.HostName))
 
 	return i.runSteps(steps...)
 }
@@ -101,7 +138,7 @@ func (i *Command) RunInstallMaster() error {
 			filepath.Join("/data/user", os.Getenv("USER"), "cryosparc_backup")),
 
 		i.CryosparcmStopStep(
-			i.cfg.HostName, i.cfg.CryosparcPath, i.cfg.CryosparcmHelp),
+			i.cfg.HostName, i.cfg.CryosparcPath, false),
 
 		i.checkInstallDirStep(
 			filepath.Join(i.cfg.CryosparcPath, "cryosparc_master")),
@@ -113,20 +150,26 @@ func (i *Command) RunInstallMaster() error {
 			i.cfg.Version,
 			i.cfg.License,
 			"master",
-			i.cfg.Arch),
+			i.cfg.ArchMaster),
 
 		i.ExtractArchiveStep(
 			i.cfg.CryosparcPath,
 			i.cfg.Version,
 			"master",
-			i.cfg.Arch),
+			i.cfg.ArchMaster),
 
-		i.setCryosparcBasePortStep(i.cfg.HostName, i.cfg.BasePort),
+		i.setCryosparcBasePortStep(
+			i.cfg.HostName,
+			i.cfg.BasePort,
+			portStart,
+			portEnd,
+			portCount,
+		),
 
 		i.InstallMasterStep(
 			i.cfg.CryosparcPath, i.cfg.Version, i.cfg.License,
 			i.cfg.HostName, i.cfg.DbPath,
-			i.cfg.SSDPath, i.cfg.Arch, i.cfg.BasePort),
+			i.cfg.SSDPath, i.cfg.ArchMaster),
 
 		i.replaceLicenseIDStep(
 			filepath.Join(i.cfg.CryosparcPath, "cryosparc_master"),
@@ -136,9 +179,18 @@ func (i *Command) RunInstallMaster() error {
 		i.CryosparcmStartStep(
 			i.cfg.HostName,
 			i.cfg.CryosparcPath,
-			i.cfg.CryosparcmHelp),
+			false),
 
-		i.HttpUrlStep(i.cfg.HostName, i.cfg.BasePort),
+		i.CryosparcmCreateUserStep(
+			i.cfg.HostName,
+			i.cfg.CryosparcPath,
+			i.cfg.User.Email,
+			i.cfg.User.Username,
+			i.cfg.User.FirstName,
+			i.cfg.User.LastName,
+			false),
+
+		i.HttpUrlStep(i.cfg.HostName),
 	)
 }
 
@@ -147,25 +199,28 @@ func (i *Command) RunInstallWorker() error {
 	return i.runSteps(
 
 		i.checkInstallDirStep(
-			filepath.Join(i.cfg.CryosparcPath,
-				"cryosparc_worker")),
+			filepath.Join(
+				i.cfg.CryosparcPath,
+				fmt.Sprintf("cryosparc_worker_%s", i.cfg.ArchWorker))),
 
 		i.downloadCryosparcStep(
 			i.cfg.CryosparcPath,
 			i.cfg.Version,
 			i.cfg.License,
 			"worker",
-			i.cfg.Arch),
+			i.cfg.ArchWorker),
 
 		i.ExtractArchiveStep(
-			i.cfg.CryosparcPath, i.cfg.Version, "worker", i.cfg.Arch),
+			i.cfg.CryosparcPath, i.cfg.Version, "worker", i.cfg.ArchWorker),
 
 		i.InstallWorkerStep(
-			i.cfg.CryosparcPath, i.cfg.Version, i.cfg.License, i.cfg.Arch),
+			i.cfg.CryosparcPath, i.cfg.Version, i.cfg.License, i.cfg.ArchWorker),
 
 		i.replaceLicenseIDStep(
 			filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
 			i.cfg.License,
 			"worker"),
+
+		i.RenameWorkerDirectoryStep(i.cfg.CryosparcPath, i.cfg.ArchWorker),
 	)
 }

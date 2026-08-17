@@ -12,6 +12,7 @@ func (i *Command) RunLanesCreateCmd() error {
 			i.cfg.Lanes.Gpus,
 			i.cfg.Lanes.CpusPerTask,
 			i.cfg.Lanes.Cluster,
+			i.cfg.ArchWorker,
 		),
 	)
 }
@@ -22,7 +23,8 @@ func (i *Command) RunLanesCreateDefaultCmd() error {
 		i.cfg.Lanes.CachePath,
 		i.cfg.Lanes.Memory,
 		i.cfg.Lanes.Gpus,
-		i.cfg.Lanes.CpusPerTask)...)
+		i.cfg.Lanes.CpusPerTask,
+		i.cfg.ArchWorker)...)
 }
 
 func (i *Command) RunLanesInstallCmd() error {

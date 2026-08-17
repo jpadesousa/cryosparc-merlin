@@ -89,6 +89,48 @@ func cryosparcmCmd(
 }
 
 // =============================================================================
+// Cryosparcw command
+// =============================================================================
+func cryosparcwCmd(
+	cryosparcpath,
+	arch string,
+	help bool,
+	args ...string) *exec.Cmd {
+
+	var cmd *exec.Cmd
+
+	remoteCmd := []string{
+		filepath.Join(cryosparcpath,
+			fmt.Sprintf("cryosparc_worker_%s", arch),
+			"bin",
+			"cryosparcw",
+		),
+	}
+
+	if help {
+
+		cmd = exec.Command(
+			strings.Join(remoteCmd, " "),
+			"--help",
+		)
+
+	} else {
+
+		cmd = exec.Command(
+			strings.Join(remoteCmd, " "),
+			args...,
+		)
+
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd
+}
+
+// =============================================================================
 // Download Master
 // =============================================================================
 type progressReader struct {
@@ -444,6 +486,17 @@ func (i *Command) extractArchive(
 }
 
 // =============================================================================
+// Rename directory
+// =============================================================================
+func (i *Command) renameDirectory(from, to string) error {
+	if err := os.Rename(from, to); err != nil {
+		return fmt.Errorf("failed to rename directory %q to %q: %w", from, to, err)
+	}
+
+	return nil
+}
+
+// =============================================================================
 // Install Master
 // =============================================================================
 func (i *Command) installMaster(
@@ -639,10 +692,11 @@ func (i *Command) CreateLane(
 	partition,
 	gpus,
 	cpuspertask,
-	cluster string,
+	cluster,
+	arch string,
 ) error {
 
-	// Directory where the generated files will be placed.
+	// Directory where the generated files will be placed
 	laneDir := filepath.Join(cryosparcpath, "lanes", name)
 
 	if err := os.MkdirAll(laneDir, 0755); err != nil {
@@ -651,7 +705,7 @@ func (i *Command) CreateLane(
 
 	workerBinPath := filepath.Join(
 		cryosparcpath,
-		"cryosparc_worker",
+		fmt.Sprintf("cryosparc_worker_%s", arch),
 		"bin",
 		"cryosparcw",
 	)
@@ -706,6 +760,13 @@ func (i *Command) CreateLane(
 
 	var script string
 
+	// Set default cpus per task value for GPU nodes
+	if cpuspertask == "num_cpu" && strings.Contains(partition, "a100-") {
+		cpuspertask = "16 * num_gpu"
+	} else if cpuspertask == "num_cpu" && strings.Contains(partition, "gh-") {
+		cpuspertask = "72 * num_gpu"
+	}
+
 	if cluster == "gmerlin7" {
 		script = fmt.Sprintf(`#!/usr/bin/env bash
 
@@ -740,6 +801,7 @@ func (i *Command) CreateLane(
 #SBATCH --cluster=%s
 #SBATCH --gres=gpu:{{ %s }}
 #SBATCH --cpus-per-task={{ %s }}
+#SBATCH --hint=nomultithread
 
 {%%- if num_gpu == 0 %%}
 # Use CPU cluster
@@ -793,6 +855,7 @@ exit $?
 #SBATCH --partition=%s
 #SBATCH --cluster=%s
 #SBATCH --cpus-per-task={{ %s }}
+#SBATCH --hint=nomultithread
 
 {%%- if num_gpu > 0 %%}
 # Use GPU cluster

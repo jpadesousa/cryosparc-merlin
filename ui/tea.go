@@ -54,7 +54,7 @@ type model struct {
 // Step represents a single unit of work in the progress UI
 type Step struct {
 	Message          string
-	CompletedMessage string
+	CompletedMessage func() string
 	SkipMessage      string
 
 	Condition func() (bool, error)
@@ -252,16 +252,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Record the completed step so it can be rendered with a checkmark.
-		if m.steps[m.current].CompletedMessage != "" {
+		if m.steps[m.current].CompletedMessage != nil {
+			message := m.steps[m.current].CompletedMessage()
+
 			m.completed = append(
 				m.completed,
-				m.steps[m.current].CompletedMessage,
+				message,
 			)
 
-			m.history = append(m.history, stepStatus{
-				status:  "completed",
-				message: m.steps[m.current].CompletedMessage,
-			})
+			m.history = append(
+				m.history,
+				stepStatus{
+					status:  "completed",
+					message: message,
+				},
+			)
 		}
 
 		// Advance to the next step.

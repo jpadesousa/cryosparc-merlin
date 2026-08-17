@@ -8,10 +8,10 @@ type Config struct {
 	SSDPath        string
 	License        string
 	HostName       string
-	Arch           string
 	ArchMaster     string
 	ArchWorker     string
 	CryosparcmHelp bool
+	CryosparcwHelp bool
 	BasePort       uint
 
 	Lanes struct {
@@ -26,5 +26,12 @@ type Config struct {
 		Info        string
 		Script      string
 		InstallAll  bool
+	}
+
+	User struct {
+		Email     string
+		Username  string
+		FirstName string
+		LastName  string
 	}
 }
