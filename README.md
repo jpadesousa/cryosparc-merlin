@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CryoSPARC Merlin
 
 A command-line helper for installing, configuring, and managing [CryoSPARC](https://cryosparc.com/) on the Merlin cluster.
@@ -82,3 +83,8 @@ and then install all lanes created
 ```bash
 cryosparc-merlin lanes install -d $HOME/cryosparc_v5.0.6 --all
 ```
+=======
+# cryosparc-merlin
+
+A CLI helper for installing, configuring, and managing CryoSPARC on the PSI Merlin cluster.
+>>>>>>> f0cfa93 (Initial commit)
