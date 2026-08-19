@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	portStart uint = 39500 // Start port range to assign new base port
+	portStart uint = 39400 // Start port range to assign new base port
 	portEnd   uint = 40000 // End port range to assign new base port
 	portCount uint = 10    // Number of contiguous ports available
 )
@@ -68,7 +68,7 @@ func (i *Command) RunInstallComplete() error {
 			i.cfg.User.Username,
 			i.cfg.User.FirstName,
 			i.cfg.User.LastName,
-			false),
+			i.cfg.CryosparcmHelp),
 	}
 
 	// cryosparc_worker
@@ -119,8 +119,8 @@ func (i *Command) RunInstallComplete() error {
 		i.cfg.Lanes.Info,
 		i.cfg.Lanes.Script,
 		i.cfg.Lanes.Name,
-		true,  // bool to install all lanes created (--all)
-		false, // bool to show help (--help)
+		true, // bool to install all lanes created (--all)
+		i.cfg.CryosparcmHelp,
 	)...)
 
 	steps = append(steps, i.HttpUrlStep(i.cfg.HostName))

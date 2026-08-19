@@ -70,6 +70,13 @@ func main() {
 		runHelpCmd,
 	)
 
+	// instances commands
+	instancesCmd := newCommand(
+		"instances",
+		"Check running CryoSPARC instances",
+		runCmd((*command.Command).RunCheckInstances),
+	)
+
 	// cryosparcm commands
 	cryosparcmCmd := newCommand(
 		"cryosparcm",
@@ -132,7 +139,7 @@ func main() {
 
 	lanesCreateCmd := newCommand(
 		"create",
-		"Create a new CryoSPARC lane",
+		"Create new CryoSPARC lane",
 		runCmd((*command.Command).RunLanesCreateCmd),
 	)
 
@@ -140,7 +147,7 @@ func main() {
 
 	lanesCreateDefaultCmd := newCommand(
 		"default",
-		"Install the default CryoSPARC lanes",
+		"Install default CryoSPARC lanes",
 		runCmd((*command.Command).RunLanesCreateDefaultCmd),
 	)
 
@@ -152,13 +159,13 @@ func main() {
 
 	lanesInstallCmd := newCommand(
 		"install",
-		"Install a CryoSPARC lane",
+		"Install CryoSPARC lane",
 		runCmd((*command.Command).RunLanesInstallCmd),
 	)
 
 	lanesRemoveCmd := newCommand(
 		"remove",
-		"Remove a CryoSPARC lane",
+		"Remove CryoSPARC lane",
 		runCmd((*command.Command).RunLanesRemoveCmd),
 	)
 
@@ -177,7 +184,7 @@ func main() {
 
 	userCreateCmd := newCommand(
 		"create",
-		"Create a new CryoSPARC user",
+		"Create new CryoSPARC user",
 		runCmd((*command.Command).RunUserCreateCmd),
 	)
 
@@ -187,12 +194,18 @@ func main() {
 
 	// Base commands
 	cobraCmd.AddCommand(
+		instancesCmd,
 		cryosparcmCmd,
 		cryosparcwCmd,
 		installCmd,
 		lanesCmd,
 		userCmd,
 	)
+
+	// =============================================
+	// instances CLI Flags
+	// =============================================
+	addInstancesFlags(instancesCmd)
 
 	// =============================================
 	// cryosparcm CLI Flags
@@ -395,7 +408,7 @@ func addCryosparcPathFlag(cmd *cobra.Command) {
 		"cryosparc-path",
 		"d",
 		defaultCryosparcPath,
-		"Installation directory for CryoSPARC",
+		"Path to the CryoSPARC installation directory",
 	)
 }
 
@@ -413,8 +426,11 @@ func addCryosparcmHelpFlag(cmd *cobra.Command, command string) {
 		&cfg.CryosparcmHelp,
 		"list-commands",
 		false,
-		fmt.Sprintf("List %s commands\nSame as running "+
-			"'%s --help' (only available from version 5)", command, command),
+		fmt.Sprintf(
+			"List available %s commands "+
+				"(equivalent to '%s --help'; available from version 5)",
+			command, command,
+		),
 	)
 }
 
@@ -423,7 +439,7 @@ func addArchWorkerFlag(cmd *cobra.Command) {
 		&cfg.ArchWorker,
 		"arch-worker",
 		defaultArchWorker,
-		"Worker architecture ('x86_64', 'aarch64')",
+		"Worker architecture: 'x86_64' or 'aarch64'",
 	)
 }
 
@@ -432,7 +448,7 @@ func addArchWorkerInstallFlag(cmd *cobra.Command) {
 		&cfg.ArchWorker,
 		"arch-worker",
 		defaultArchWorker,
-		"Worker architecture ('x86_64', 'aarch64', 'both')",
+		"Worker architecture: 'x86_64', 'aarch64', or 'both'",
 	)
 }
 
@@ -459,7 +475,7 @@ func addSsdPathFlag(cmd *cobra.Command) {
 		&cfg.SSDPath,
 		"ssdpath",
 		defaultSSDPath,
-		"SSD cache directory",
+		"Path to the SSD cache directory",
 	)
 }
 
@@ -468,7 +484,7 @@ func addBasePortFlag(cmd *cobra.Command) {
 		&cfg.BasePort,
 		"port",
 		0,
-		"Base TCP port for CryoSPARC services",
+		"Base TCP port used by CryoSPARC services",
 	)
 }
 
@@ -477,7 +493,7 @@ func addArchMasterFlag(cmd *cobra.Command) {
 		&cfg.ArchMaster,
 		"arch-master",
 		defaultArchMaster,
-		"Master architecture ('x86_64', 'aarch64')",
+		"Master architecture: 'x86_64' or 'aarch64'",
 	)
 }
 
@@ -486,7 +502,7 @@ func addCryosparcDbPathFlag(cmd *cobra.Command) {
 		&cfg.DbPath,
 		"dbpath",
 		defaultDbPath,
-		"CryoSPARC database directory",
+		"Path to the CryoSPARC database directory",
 	)
 }
 
@@ -504,7 +520,7 @@ func addLanesCachePathFlag(cmd *cobra.Command) {
 		&cfg.Lanes.CachePath,
 		"cache-path",
 		defaultLaneCachePath,
-		"Cache directory",
+		"Path to the lane cache directory",
 	)
 }
 
@@ -513,7 +529,7 @@ func addLanesClusterFlag(cmd *cobra.Command) {
 		&cfg.Lanes.Cluster,
 		"cluster",
 		"",
-		"Cluster name (merlin7 or gmerlin7)",
+		"Cluster name: 'merlin7' or 'gmerlin7'",
 	)
 }
 
@@ -522,7 +538,7 @@ func addLanesMemoryFlag(cmd *cobra.Command) {
 		&cfg.Lanes.Memory,
 		"memory",
 		defaultLaneMemory,
-		"Memory requested for the job (in Gb)",
+		"Memory allocated to the job (in GB)",
 	)
 }
 
@@ -531,7 +547,7 @@ func addLanesTimeFlag(cmd *cobra.Command) {
 		&cfg.Lanes.Time,
 		"time",
 		"",
-		"Time requested for the job (format: dd-hh:mm:ss)",
+		"Maximum job duration (format: dd-hh:mm:ss)",
 	)
 }
 
@@ -540,7 +556,7 @@ func addLanesPartitionFlag(cmd *cobra.Command) {
 		&cfg.Lanes.Partition,
 		"partition",
 		"",
-		"Partition requested for the job (e.g., cpu-hourly or gpu-hourly)",
+		"Cluster partition for the job (e.g. 'cpu-hourly' or 'gpu-hourly')",
 	)
 }
 
@@ -549,7 +565,7 @@ func addLanesGpusFlag(cmd *cobra.Command) {
 		&cfg.Lanes.Gpus,
 		"gpus",
 		defaultLaneGpus,
-		"Number of GPUs requested for the job",
+		"Number of GPUs allocated to the job",
 	)
 }
 
@@ -558,8 +574,7 @@ func addLanesCpusPerTaskFlag(cmd *cobra.Command) {
 		&cfg.Lanes.CpusPerTask,
 		"cpus-per-task",
 		defaultLaneCpusPerTask,
-		"Number of CPUs per task requested for "+
-			"the job",
+		"Number of CPUs allocated per task",
 	)
 }
 
@@ -568,8 +583,7 @@ func addLanesInfoFlag(cmd *cobra.Command) {
 		&cfg.Lanes.Info,
 		"info",
 		"",
-		"Directory of the cluster_info.json "+
-			"file (only available from version 5)",
+		"Directory containing cluster_info.json (available from version 5)",
 	)
 }
 
@@ -578,8 +592,7 @@ func addLanesScriptFlag(cmd *cobra.Command) {
 		&cfg.Lanes.Script,
 		"script",
 		"",
-		"Directory of the cluster_script.sh "+
-			"file (only available from version 5)",
+		"Directory containing cluster_script.sh (available from version 5)",
 	)
 }
 
@@ -588,7 +601,7 @@ func addLanesInstallAllFlag(cmd *cobra.Command) {
 		&cfg.Lanes.InstallAll,
 		"all",
 		false,
-		"Install all lanes stored in the CryoSPARC directory",
+		"Install all lanes configured in the CryoSPARC directory",
 	)
 }
 
@@ -597,7 +610,7 @@ func addUserEmailFlag(cmd *cobra.Command) {
 		&cfg.User.Email,
 		"email",
 		"",
-		"New user's email",
+		"Email address for the new user",
 	)
 }
 
@@ -606,7 +619,7 @@ func addUserUsernameFlag(cmd *cobra.Command) {
 		&cfg.User.Username,
 		"username",
 		"",
-		"New user's username",
+		"Username for the new user",
 	)
 }
 
@@ -615,7 +628,7 @@ func addUserFirstNameFlag(cmd *cobra.Command) {
 		&cfg.User.FirstName,
 		"firstname",
 		"",
-		"New user's first name",
+		"First name of the new user",
 	)
 }
 
@@ -624,8 +637,18 @@ func addUserLastNameFlag(cmd *cobra.Command) {
 		&cfg.User.LastName,
 		"lastname",
 		"",
-		"New user's last name",
+		"Last name of the new user",
 	)
+}
+
+// instances
+func addInstancesFlags(cmd *cobra.Command) {
+	flags := cmd.Flags()
+
+	addHostnameFlag(cmd)
+
+	flags.SetInterspersed(false)
+	flags.SortFlags = false
 }
 
 // cryosparcm
@@ -735,26 +758,24 @@ func addLanesInstallFlags(cmd *cobra.Command) {
 		scriptSet := cmd.Flags().Changed("script")
 
 		if nameSet && allSet {
-			return fmt.Errorf(
-				"flags '--name' and '--all' cannot be set simultaneously")
+			return fmt.Errorf("cannot use '--name' and '--all' together")
 		}
 
 		if (infoSet && !scriptSet) || (!infoSet && scriptSet) {
-			return fmt.Errorf(
-				"both '--info' and '--script' need to be set")
+			return fmt.Errorf("'--info' and '--script' must be used together")
 		}
 
 		if (nameSet || allSet) && (infoSet && scriptSet) {
 			return fmt.Errorf(
-				"set '--info' and '--script' or just '--name' or '--all'")
+				"cannot combine '--name' or '--all' with '--info' and '--script'",
+			)
 		}
 
 		if !nameSet && !allSet && !infoSet && !scriptSet {
-			return fmt.Errorf(`no lanes selected.
-		Use '--name [lane name]' to install a lane stored
-		in the CryoSPARC directory. Use '--all' to install all lanes stored
-		in the CryoSPARC directory. Or only provide '--info' and '--script'
-		to install a lane using cluster_info.json and cluster_script.sh files`)
+			return fmt.Errorf(
+				"no lane installation source specified; use '--name <lane>', " +
+					"'--all', or both '--info <directory>' and '--script <directory>'",
+			)
 		}
 
 		return nil

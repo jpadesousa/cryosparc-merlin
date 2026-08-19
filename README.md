@@ -15,7 +15,8 @@ The tool provides a single CLI for common CryoSPARC administration tasks, includ
 * Create CryoSPARC users
 * Run `cryosparcm` commands
 * Run `cryosparcw` commands
-* Automatic detection of available ports via [findbaseport](https://github.com/jpadesousa/findbaseport)
+* Automatic detection of available ports with [findbaseport](https://github.com/jpadesousa/findbaseport)
+* Detection of running CryoSPARC instances with [uports](https://github.com/jpadesousa/uports)
 
 ## Installation
 
@@ -54,6 +55,7 @@ Available top-level commands:
 cryosparcm
 cryosparcw
 install
+instances
 lanes
 user
 ```

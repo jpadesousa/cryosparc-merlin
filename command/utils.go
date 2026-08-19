@@ -933,3 +933,23 @@ func (i *Command) setCryosparcBasePort(
 
 	return nil
 }
+
+// =============================================================================
+// Check running CryoSPARC instances
+// =============================================================================
+func (i *Command) checkInstances(hostname string) *exec.Cmd {
+	remoteCmd := `uports --cmd "node dist/server/index.js" 
+	| awk 'NR > 2 {print "http://` + hostname + `:" $1}'`
+
+	cmd := exec.Command(
+		"ssh",
+		fmt.Sprintf("%s@%s", os.Getenv("USER"), hostname),
+		remoteCmd,
+	)
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd
+}

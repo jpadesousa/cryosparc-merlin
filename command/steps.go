@@ -911,7 +911,7 @@ func (i *Command) LanesInstallSteps(
 			}
 
 		} else {
-			fmt.Println("no lanes selected. Use '--name [lane name]' " +
+			fmt.Println("no lanes selected. Use '--name <lane name>' " +
 				"to select a lane to install or '--all' to install all " +
 				"lanes stored in the CryoSPARC directory.")
 			return nil
@@ -974,7 +974,9 @@ func (i *Command) HttpUrlStep(hostname string) ui.Step {
 // =============================================================================
 // Set CryoSPARC base port
 // =============================================================================
-func (i *Command) setCryosparcBasePortStep(hostname string, port, start, end, count uint) ui.Step {
+func (i *Command) setCryosparcBasePortStep(
+	hostname string,
+	port, start, end, count uint) ui.Step {
 
 	return ui.Step{
 		Message: "Setting CryoSPARC base port",
@@ -992,6 +994,22 @@ func (i *Command) setCryosparcBasePortStep(hostname string, port, start, end, co
 		Action: func(update func(float64)) error {
 
 			return i.setCryosparcBasePort(hostname, start, end, count)
+
+		},
+	}
+}
+
+// =============================================================================
+// Check running instances
+// =============================================================================
+func (i *Command) CheckInstancesStep(hostname string) ui.Step {
+
+	return ui.Step{
+		Message:          "Checking running CryoSPARC instances",
+		CompletedMessage: nil,
+		Exec: func() *exec.Cmd {
+
+			return i.checkInstances(hostname)
 
 		},
 	}
