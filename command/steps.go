@@ -186,18 +186,18 @@ func (i *Command) CryosparcwStep(
 // =============================================================================
 // Check Install Directory
 // =============================================================================
-func (i *Command) checkInstallDirStep(installDir string) ui.Step {
+func (i *Command) checkInstallDirStep(oldDir, newDir string) ui.Step {
 	var action string
 
 	return ui.Step{
 		Message: fmt.Sprintf(
-			"Preparing installation directory %s", installDir),
+			"Preparing installation directory %s", oldDir),
 		CompletedMessage: func() string {
 			return fmt.Sprintf(
-				"Created installation directory %s", installDir)
+				"Created installation directory %s", newDir)
 		},
 		Condition: func() (bool, error) {
-			return directoryExistsAndNotEmpty(installDir)
+			return directoryExistsAndNotEmpty(oldDir)
 		},
 		Prompt: func() *huh.Form {
 			return huh.NewForm(
@@ -205,7 +205,7 @@ func (i *Command) checkInstallDirStep(installDir string) ui.Step {
 					huh.NewSelect[string]().
 						Title(fmt.Sprintf(
 							"%q already exists",
-							installDir,
+							oldDir,
 						)).
 						Options(
 							huh.NewOption("Overwrite directory", "overwrite"),
@@ -223,14 +223,14 @@ func (i *Command) checkInstallDirStep(installDir string) ui.Step {
 
 			case "overwrite":
 
-				if err := os.RemoveAll(installDir); err != nil {
+				if err := os.RemoveAll(oldDir); err != nil {
 					return err
 				}
 
-				return i.createDirectory(update, installDir)
+				return i.createDirectory(update, newDir)
 
 			default:
-				return i.createDirectory(update, installDir)
+				return i.createDirectory(update, newDir)
 
 			}
 		},

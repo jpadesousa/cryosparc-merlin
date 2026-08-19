@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 var (
@@ -15,6 +17,29 @@ var (
 
 // install complete
 func (i *Command) RunInstallComplete() error {
+
+	// ====================================================================== //
+	// Only after version 5 that CryoSPARC allows to have different cryosparc
+	// worker installations
+	// ====================================================================== //
+	version := strings.TrimSpace(i.cfg.Version)
+
+	major, _, ok := strings.Cut(version, ".")
+	if !ok {
+		major = version
+	}
+
+	majorVersion, err := strconv.Atoi(major)
+	if err == nil && majorVersion < 5 {
+
+		if i.cfg.ArchWorker == "both" {
+			return fmt.Errorf(
+				"Multiple worker installations " +
+					"is only available from version 5")
+		}
+
+	}
+	// ====================================================================== //
 
 	steps := []ui.Step{
 
@@ -27,7 +52,7 @@ func (i *Command) RunInstallComplete() error {
 		i.CryosparcmStopStep(
 			i.cfg.HostName, i.cfg.CryosparcPath, false),
 
-		i.checkInstallDirStep(i.cfg.CryosparcPath),
+		i.checkInstallDirStep(i.cfg.CryosparcPath, i.cfg.CryosparcPath),
 
 		i.createDbPathStep(i.cfg.DbPath),
 
@@ -98,9 +123,16 @@ func (i *Command) RunInstallComplete() error {
 				filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
 				i.cfg.License,
 				"worker"),
-
-			i.RenameWorkerDirectoryStep(i.cfg.CryosparcPath, arch),
 		)
+
+		// ================================================================== //
+		if majorVersion >= 5 {
+			steps[len(steps)-1] = i.RenameWorkerDirectoryStep(
+				i.cfg.CryosparcPath,
+				arch,
+			)
+		}
+		// ================================================================== //
 
 		// Create all default lanes
 		steps = append(steps, i.LanesCreateDefaultSteps(
@@ -141,6 +173,7 @@ func (i *Command) RunInstallMaster() error {
 			i.cfg.HostName, i.cfg.CryosparcPath, false),
 
 		i.checkInstallDirStep(
+			filepath.Join(i.cfg.CryosparcPath, "cryosparc_master"),
 			filepath.Join(i.cfg.CryosparcPath, "cryosparc_master")),
 
 		i.createDbPathStep(i.cfg.DbPath),
@@ -196,12 +229,16 @@ func (i *Command) RunInstallMaster() error {
 
 // install worker
 func (i *Command) RunInstallWorker() error {
-	return i.runSteps(
+
+	steps := []ui.Step{
 
 		i.checkInstallDirStep(
 			filepath.Join(
 				i.cfg.CryosparcPath,
-				fmt.Sprintf("cryosparc_worker_%s", i.cfg.ArchWorker))),
+				fmt.Sprintf("cryosparc_worker_%s", i.cfg.ArchWorker),
+			),
+			filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
+		),
 
 		i.downloadCryosparcStep(
 			i.cfg.CryosparcPath,
@@ -214,7 +251,11 @@ func (i *Command) RunInstallWorker() error {
 			i.cfg.CryosparcPath, i.cfg.Version, "worker", i.cfg.ArchWorker),
 
 		i.InstallWorkerStep(
-			i.cfg.CryosparcPath, i.cfg.Version, i.cfg.License, i.cfg.ArchWorker),
+			i.cfg.CryosparcPath,
+			i.cfg.Version,
+			i.cfg.License,
+			i.cfg.ArchWorker,
+		),
 
 		i.replaceLicenseIDStep(
 			filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
@@ -222,5 +263,33 @@ func (i *Command) RunInstallWorker() error {
 			"worker"),
 
 		i.RenameWorkerDirectoryStep(i.cfg.CryosparcPath, i.cfg.ArchWorker),
-	)
+	}
+
+	// ====================================================================== //
+	// Only after version 5 that CryoSPARC allows to have different cryosparc
+	// worker installations
+	// ====================================================================== //
+	version := strings.TrimSpace(i.cfg.Version)
+
+	major, _, ok := strings.Cut(version, ".")
+	if !ok {
+		major = version
+	}
+
+	if majorVersion, err := strconv.Atoi(major); err == nil &&
+		majorVersion < 5 {
+
+		// do not create a worker directory with arch
+		steps[0] =
+			i.checkInstallDirStep(
+				filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
+				filepath.Join(i.cfg.CryosparcPath, "cryosparc_worker"),
+			)
+
+		// do not run rename worker directory
+		steps = steps[:len(steps)-1]
+	}
+	// ====================================================================== //
+
+	return i.runSteps(steps...)
 }

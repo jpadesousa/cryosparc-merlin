@@ -92,36 +92,65 @@ func cryosparcmCmd(
 // Cryosparcw command
 // =============================================================================
 func cryosparcwCmd(
-	cryosparcpath,
+	cryosparcPath string,
 	arch string,
 	help bool,
-	args ...string) *exec.Cmd {
+	args ...string,
+) *exec.Cmd {
+	var cmdArgs []string
 
-	var cmd *exec.Cmd
+	// Get local architecture.
+	localArch, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		localArch = nil
+	}
 
-	remoteCmd := []string{
-		filepath.Join(cryosparcpath,
-			fmt.Sprintf("cryosparc_worker_%s", arch),
-			"bin",
-			"cryosparcw",
-		),
+	isLocal := strings.TrimSpace(string(localArch)) == arch
+
+	// CryoSPARC >= 5 supports architecture-specific worker
+	// installations. Older versions use the generic worker path.
+	workerDir := fmt.Sprintf("cryosparc_worker_%s", arch)
+
+	versionData, err := os.ReadFile(
+		filepath.Join(cryosparcPath, "cryosparc_master", "version"),
+	)
+	if err == nil {
+		version := strings.TrimPrefix(strings.TrimSpace(string(versionData)), "v")
+
+		major, _, _ := strings.Cut(version, ".")
+		if majorVersion, err := strconv.Atoi(major); err == nil &&
+			majorVersion < 5 {
+			workerDir = "cryosparc_worker"
+		}
+	}
+
+	workerCmd := filepath.Join(
+		cryosparcPath,
+		workerDir,
+		"bin",
+		"cryosparcw",
+	)
+
+	if !isLocal && arch == "aarch64" {
+		// Run on ARM nodes.
+		cmdArgs = []string{
+			"srun",
+			"--cluster", "gmerlin7",
+			"--partition", "gh-interactive",
+			"--time", "0-00:01:00",
+			workerCmd,
+		}
+	} else {
+		cmdArgs = []string{workerCmd}
 	}
 
 	if help {
-
-		cmd = exec.Command(
-			strings.Join(remoteCmd, " "),
-			"--help",
-		)
-
+		cmdArgs = append(cmdArgs, "--help")
 	} else {
-
-		cmd = exec.Command(
-			strings.Join(remoteCmd, " "),
-			args...,
-		)
-
+		cmdArgs = append(cmdArgs, args...)
 	}
+
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
