@@ -9,22 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
+  release:
+    name: Build and release
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            name: linux-amd64
-            extension: ""
-
-          - goos: linux
-            goarch: arm64
-            name: linux-arm64
-            extension: ""
 
     steps:
       - name: Checkout
@@ -35,52 +22,38 @@ jobs:
         with:
           go-version: stable
 
-      - name: Build
+      - name: Build binaries
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
           VERSION: ${{ gitea.ref_name }}
+          CGO_ENABLED: 0
         run: |
           mkdir -p dist
-          go build \
+
+          GOOS=linux GOARCH=amd64 \
+            go build \
             -ldflags="-X main.version=${VERSION}" \
-            -o "dist/cryosparc-merlin-${{ matrix.name }}${{ matrix.extension }}" \
+            -o dist/cryosparc-merlin-linux-amd64 \
             .
 
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: cryosparc-merlin-${{ matrix.name }}
-          path: dist/cryosparc-merlin-${{ matrix.name }}${{ matrix.extension }}
-
-  release:
-    name: Create release
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download binaries
-        uses: actions/download-artifact@v3
-        with:
-          pattern: cryosparc-merlin-*
-          path: dist
-          merge-multiple: true
+          GOOS=linux GOARCH=arm64 \
+            go build \
+            -ldflags="-X main.version=${VERSION}" \
+            -o dist/cryosparc-merlin-linux-arm64 \
+            .
 
       - name: Generate checksums
-        working-directory: dist
         run: |
-          sha256sum * > checksums.txt
+          cd dist
+          sha256sum cryosparc-merlin-* > checksums.txt
 
-      - name: Create Gitea Release
+      - name: Create Gitea release
         uses: akkuman/gitea-release-action@v1
         with:
           server_url: ${{ gitea.server_url }}
           repository: ${{ gitea.repository }}
           tag_name: ${{ gitea.ref_name }}
           name: ${{ gitea.ref_name }}
-          body: |
-            Release ${{ gitea.ref_name }}
           files: |
-            dist/cryosparc-merlin-*
+            dist/cryosparc-merlin-linux-amd64
+            dist/cryosparc-merlin-linux-arm64
             dist/checksums.txt
