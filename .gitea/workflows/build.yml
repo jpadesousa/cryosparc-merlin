@@ -1,44 +1,55 @@
-name: Build Release Binaries
+name: Build Release Binaries 
 
 on:
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    name: Build binaries
+    name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+            extension: ""
+
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+            extension: ""
 
     steps:
       - name: Checkout
-        run: |
-          git clone "${{ gitea.server_url }}/${{ gitea.repository }}.git" .
-          git checkout "${{ gitea.ref_name }}"
+        uses: actions/checkout@v4
 
-      - name: Build binaries
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Build
         env:
-          VERSION: ${{ gitea.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          VERSION: ${{ gitea.ref_name }}
         run: |
           mkdir -p dist
-
-          GOOS=linux GOARCH=amd64 \
-            go build \
+          go build \
             -ldflags="-X main.version=${VERSION}" \
-            -o dist/cryosparc-merlin-linux-amd64 \
+            -o "dist/cryosparc-merlin-${{ matrix.name }}${{ matrix.extension }}" \
             .
 
-          GOOS=linux GOARCH=arm64 \
-            go build \
-            -ldflags="-X main.version=${VERSION}" \
-            -o dist/cryosparc-merlin-linux-arm64 \
-            .
-
-          cd dist
-          sha256sum cryosparc-merlin-* > checksums.txt
-
-      - name: Show generated files
-        run: |
-          ls -lh dist/
-          cat dist/checksums.txt
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: cryosparc-merlin-${{ matrix.name }}
+          path: dist/cryosparc-merlin-${{ matrix.name }}${{ matrix.extension }}
