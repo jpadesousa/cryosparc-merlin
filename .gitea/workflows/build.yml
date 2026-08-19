@@ -1,26 +1,20 @@
-name: Release
+name: Build Release Binaries
 
 on:
   push:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-
 jobs:
-  release:
-    name: Build and release
+  build:
+    name: Build binaries
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: stable
+        run: |
+          git clone "${{ gitea.server_url }}/${{ gitea.repository }}.git" .
+          git checkout "${{ gitea.ref_name }}"
 
       - name: Build binaries
         env:
@@ -41,19 +35,10 @@ jobs:
             -o dist/cryosparc-merlin-linux-arm64 \
             .
 
-      - name: Generate checksums
-        run: |
           cd dist
           sha256sum cryosparc-merlin-* > checksums.txt
 
-      - name: Create Gitea release
-        uses: akkuman/gitea-release-action@v1
-        with:
-          server_url: ${{ gitea.server_url }}
-          repository: ${{ gitea.repository }}
-          tag_name: ${{ gitea.ref_name }}
-          name: ${{ gitea.ref_name }}
-          files: |
-            dist/cryosparc-merlin-linux-amd64
-            dist/cryosparc-merlin-linux-arm64
-            dist/checksums.txt
+      - name: Show generated files
+        run: |
+          ls -lh dist/
+          cat dist/checksums.txt
