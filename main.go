@@ -93,6 +93,13 @@ func main() {
 
 	cryosparcwCmd.PreRunE = preRunCmd("worker", false)
 
+	// changeport commands
+	changeportCmd := newCommand(
+		"changeport",
+		"Change base port",
+		runCmd((*command.Command).RunChangePort),
+	)
+
 	// Install commands
 	installCmd := newCommand(
 		"install",
@@ -197,6 +204,7 @@ func main() {
 		instancesCmd,
 		cryosparcmCmd,
 		cryosparcwCmd,
+		changeportCmd,
 		installCmd,
 		lanesCmd,
 		userCmd,
@@ -216,6 +224,11 @@ func main() {
 	// cryosparcw CLI Flags
 	// =============================================
 	addCryosparcwFlags(cryosparcwCmd)
+
+	// =============================================
+	// changeport CLI Flags
+	// =============================================
+	addChangePortFlags(changeportCmd)
 
 	// =============================================
 	// Install CLI Flags
@@ -658,6 +671,18 @@ func addCryosparcmFlags(cmd *cobra.Command) {
 	addCryosparcPathFlag(cmd)
 	addHostnameFlag(cmd)
 	addCryosparcmHelpFlag(cmd, "cryosparcm")
+
+	flags.SetInterspersed(false)
+	flags.SortFlags = false
+}
+
+// changeport
+func addChangePortFlags(cmd *cobra.Command) {
+	flags := cmd.Flags()
+
+	addCryosparcPathFlag(cmd)
+	addHostnameFlag(cmd)
+	addBasePortFlag(cmd)
 
 	flags.SetInterspersed(false)
 	flags.SortFlags = false

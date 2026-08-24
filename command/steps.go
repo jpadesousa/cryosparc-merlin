@@ -76,7 +76,6 @@ func (i *Command) CryosparcmCreateUserStep(
 		Message:          fmt.Sprintf("Creating CryoSPARC user (instance: %s)", cryosparcpath),
 		CompletedMessage: nil,
 		Condition: func() (bool, error) {
-
 			return true, nil
 		},
 		Prompt: func() *huh.Form {
@@ -159,6 +158,33 @@ func (i *Command) CryosparcmCreateUserStep(
 				"",
 				help,
 				args...)
+		},
+	}
+}
+
+func (i *Command) CryosparcmChangePortStep(
+	hostname,
+	cryosparcpath string,
+	port, start, end, count uint,
+	help bool) ui.Step {
+
+	return ui.Step{
+		Message:          fmt.Sprintf("Changing base port (instance: %s)", cryosparcpath),
+		CompletedMessage: nil,
+		Exec: func() *exec.Cmd {
+
+			if port == 0 {
+				i.setCryosparcBasePort(hostname, start, end, count)
+			}
+
+			return cryosparcmCmd(
+				hostname,
+				cryosparcpath,
+				"",
+				help,
+				"changeport",
+				strconv.FormatUint(uint64(i.cfg.BasePort), 10),
+			)
 		},
 	}
 }

@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	portStart uint = 39400 // Start port range to assign new base port
-	portEnd   uint = 40000 // End port range to assign new base port
+	portStart uint = 61000 // Start port range to assign new base port
+	portEnd   uint = 62000 // End port range to assign new base port
 	portCount uint = 10    // Number of contiguous ports available
 )
 
