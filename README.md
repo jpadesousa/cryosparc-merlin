@@ -52,6 +52,7 @@ cryosparc-merlin <command> [flags] [arguments]
 Available top-level commands:
 
 ```text
+changeport
 cryosparcm
 cryosparcw
 install
