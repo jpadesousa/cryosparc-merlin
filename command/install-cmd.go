@@ -34,7 +34,7 @@ func (i *Command) RunInstallComplete() error {
 
 		if i.cfg.ArchWorker == "both" {
 			return fmt.Errorf(
-				"Multiple worker installations " +
+				"multiple worker installations " +
 					"is only available from version 5")
 		}
 

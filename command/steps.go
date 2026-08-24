@@ -174,7 +174,7 @@ func (i *Command) CryosparcmChangePortStep(
 		Exec: func() *exec.Cmd {
 
 			if port == 0 {
-				i.setCryosparcBasePort(hostname, start, end, count)
+				_ = i.setCryosparcBasePort(hostname, start, end, count)
 			}
 
 			return cryosparcmCmd(
