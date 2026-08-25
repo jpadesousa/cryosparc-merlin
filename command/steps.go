@@ -39,7 +39,8 @@ func (i *Command) CryosparcmStartStep(
 	help bool) ui.Step {
 
 	return ui.Step{
-		Message:          fmt.Sprintf("Starting CryoSPARC (instance: %s)", cryosparcpath),
+		Message: fmt.Sprintf(
+			"Starting CryoSPARC (instance: %s)", cryosparcpath),
 		CompletedMessage: nil,
 		Exec: func() *exec.Cmd {
 			return cryosparcmCmd(hostname, cryosparcpath, "", help, "start")
@@ -53,7 +54,8 @@ func (i *Command) CryosparcmStopStep(
 	help bool) ui.Step {
 
 	return ui.Step{
-		Message:          fmt.Sprintf("Stopping CryoSPARC (instance: %s)", cryosparcpath),
+		Message: fmt.Sprintf(
+			"Stopping CryoSPARC (instance: %s)", cryosparcpath),
 		CompletedMessage: nil,
 		Exec: func() *exec.Cmd {
 			return cryosparcmCmd(hostname, cryosparcpath, "", help, "stop")
@@ -73,7 +75,8 @@ func (i *Command) CryosparcmCreateUserStep(
 	var password string
 
 	return ui.Step{
-		Message:          fmt.Sprintf("Creating CryoSPARC user (instance: %s)", cryosparcpath),
+		Message: fmt.Sprintf(
+			"Creating CryoSPARC user (instance: %s)", cryosparcpath),
 		CompletedMessage: nil,
 		Condition: func() (bool, error) {
 			return true, nil
@@ -169,7 +172,8 @@ func (i *Command) CryosparcmChangePortStep(
 	help bool) ui.Step {
 
 	return ui.Step{
-		Message:          fmt.Sprintf("Changing base port (instance: %s)", cryosparcpath),
+		Message: fmt.Sprintf(
+			"Changing base port (instance: %s)", cryosparcpath),
 		CompletedMessage: nil,
 		Exec: func() *exec.Cmd {
 
@@ -282,7 +286,8 @@ func (i *Command) backupCryosparcDatabaseStep(
 			return !exists
 		},
 		SkipMessage: fmt.Sprintf(
-			"Database backup skipped: Previous database is empty or does not exist (%s)",
+			"Database backup skipped: "+
+				"Previous database is empty or does not exist (%s)",
 			dbpath),
 		Action: func(update func(float64)) error {
 			return i.backupCryosparcDatabase(
@@ -360,10 +365,12 @@ func (i *Command) downloadCryosparcStep(
 
 	return ui.Step{
 		Message: fmt.Sprintf(
-			"Downloading CryoSPARC %s v%s arch=%s", installation, release, arch),
+			"Downloading CryoSPARC %s v%s arch=%s",
+			installation, release, arch),
 		CompletedMessage: func() string {
 			return fmt.Sprintf(
-				"Downloaded CryoSPARC %s v%s arch=%s", installation, release, arch)
+				"Downloaded CryoSPARC %s v%s arch=%s",
+				installation, release, arch)
 		},
 		Skip: func() bool {
 

@@ -732,9 +732,30 @@ func (i *Command) CreateLane(
 		return fmt.Errorf("create lane directory: %w", err)
 	}
 
+	// ====================================================================== //
+	// CryoSPARC installations before version 5 can only access the
+	// cryosparcw if the parent directory has the name 'cryosparc_worker'
+	// ====================================================================== //
+	workerDir := fmt.Sprintf("cryosparc_worker_%s", arch)
+
+	versionData, err := os.ReadFile(
+		filepath.Join(cryosparcpath, "cryosparc_master", "version"),
+	)
+	if err == nil {
+		version := strings.TrimPrefix(
+			strings.TrimSpace(string(versionData)), "v")
+
+		major, _, _ := strings.Cut(version, ".")
+		if majorVersion, err := strconv.Atoi(major); err == nil &&
+			majorVersion < 5 {
+			workerDir = "cryosparc_worker"
+		}
+	}
+	// ====================================================================== //
+
 	workerBinPath := filepath.Join(
 		cryosparcpath,
-		fmt.Sprintf("cryosparc_worker_%s", arch),
+		workerDir,
 		"bin",
 		"cryosparcw",
 	)
